@@ -1,0 +1,23 @@
+{
+  "name": "automn",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "setup": "npm install && npm --prefix frontend install && npm --prefix frontend run build",
+    "build": "npm --prefix frontend run build",
+    "runner:install": "npm ci --omit=dev",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "Matt Larritt",
+  "license": "MIT",
+  "dependencies": {
+    "body-parser": "^2.2.0",
+    "cors": "^2.8.5",
+    "express": "^5.1.0",
+    "sqlite3": "^5.1.7",
+    "uuid": "^8.3.2",
+    "ws": "^8.18.3"
+  }
+}

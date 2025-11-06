@@ -1,0 +1,9 @@
+const DEFAULT_ADMIN_PASSWORD = "scriptfall";
+const HOST_VERSION = "0.2.0";
+const MINIMUM_RUNNER_VERSION = "0.2.0";
+
+module.exports = {
+  DEFAULT_ADMIN_PASSWORD,
+  HOST_VERSION,
+  MINIMUM_RUNNER_VERSION,
+};

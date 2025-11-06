@@ -1,0 +1,51 @@
+name: automn
+
+services:
+  automn:
+    build: .
+    container_name: automn
+    environment:
+      - NODE_ENV=production
+      - PORT=8088
+      - AUTOMN_VARIABLE_KEY=${AUTOMN_VARIABLE_KEY:-change-me}
+    ports:
+      - "8088:8088"
+    volumes:
+      - automn_data:/app/data
+      - automn_logs:/app/logs
+    restart: unless-stopped
+
+  automn_runner:
+    build:
+      context: .
+      dockerfile: runner/Dockerfile
+      args:
+        PYTHON_VERSION: ${AUTOMN_RUNNER_PYTHON_VERSION:-}
+        POWERSHELL_VERSION: ${AUTOMN_RUNNER_POWERSHELL_VERSION:-}
+    container_name: automn_runner
+    depends_on:
+      - automn
+    environment:
+      - NODE_ENV=production
+      - AUTOMN_HOST_URL=http://automn:8088
+      - AUTOMN_RUNNER_ID=default
+      - AUTOMN_RUNNER_PUBLIC_URL=http://automn_runner:3030
+      - AUTOMN_RUNNER_ENDPOINT_PATH=/api/run
+      - AUTOMN_RUNNER_STATE_DIR=/app/state
+      - AUTOMN_RUNNER_SCRIPTS_DIR=/app/scripts
+      - AUTOMN_RUNNER_WORKDIR=/app/script_workdir
+      - AUTOMN_RUNNER_HEARTBEAT_MS=60000
+    ports:
+      - "3030:3030"
+    volumes:
+      - automn_runner_state:/app/state
+      - automn_runner_scripts:/app/scripts
+      - automn_runner_workdir:/app/script_workdir
+    restart: unless-stopped
+
+volumes:
+  automn_data:
+  automn_logs:
+  automn_runner_state:
+  automn_runner_scripts:
+  automn_runner_workdir:

@@ -2,6 +2,23 @@
 
 Automn is a self-hosted automation control plane for authoring, scheduling, and auditing scripts across remote execution runners. The host exposes an Express API, a bundled React UI, and a job engine that keeps execution state, logs, and notifications in sync.
 
+## Who is this for?
+
+Currently, Automn is in a very early prototype phase, though feature rich and working well as a product for my needs.
+
+Automn is seeded from similar projects I've created over the years, though this is the first attempt at decoupling the runner from the host with runner-to-host feedback. My previous projects were desktop based script runners designed to add a UI for running scripts easily with parameters, or just running scripts organized in a system tray context menu.
+
+This project is best suited for hobbiest home labbers who want a way to quickly spin up script based APIs or webhooks.
+
+Some examples I use it for:
+
+  - To receive webhooks from jellyfin when it adds a new TV show or Movie. It'll retrieve the items image from jellyfin and use it to send a pushover notification for a pro looking notification
+  - Replaces a NodeJS/Express project I was running on my home PC as a service where it could listen to commands such as /shutdown /sleep /mute etc. I used this mostly for a Siri integration, now I can much more easily update my scripts without having to rebuild my windows service every time - I just update the script in Automn! 
+  - Trigger backup processes with some logging and notifications
+  - Start and stop by openVPN container via a command (so I could have a switch in home assistant).
+
+I'd love to keep developing Automn and seeing how strong it can become.
+
 ## Features
 - **Centralised automation hub** – manage script versions, environment variables, collections, permissions, and audit trails from the web UI.
 - **Remote runner orchestration** – register runners with configurable concurrency/timeouts and stream live execution logs back to the host.

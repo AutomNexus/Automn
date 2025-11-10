@@ -35,7 +35,7 @@ If using this in production, it's highly advisable you put the host and runners 
 ```docker-compose.yml
 services:
   automn-host:
-    image: AutomNexus/automn:latest
+    image: automnexus/automn:latest
     container_name: automn
     ports:
       - "8088:8088"
@@ -47,7 +47,7 @@ services:
     restart: unless-stopped
 
   automn-runner:
-    image: AutomNexus/automn-runner:latest
+    image: automnexus/automn-runner:latest
     container_name: automn-runner
     ports:
       - "3030:3030"

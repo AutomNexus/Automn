@@ -30,23 +30,28 @@ I'd love to keep developing Automn and seeing how strong it can become.
 
 ### Script Analytics
 Logs all information about your script, scripts can include specific automn logging, see the data sent to the endpoint along with the data returned to the client.
+
 ![Script Analytics](https://raw.githubusercontent.com/AutomNexus/Automn/main/screenshots/Script-Analytics.png)
 
 ### Script Editor
 Author your script, create a /endpoint so other systems can call your script, set the allowed HTTP methods Automn will accept for this endpoint. Easily insert variables and Automn Specific snippets into your code.
+
 ![Script Editor](https://raw.githubusercontent.com/AutomNexus/Automn/main/screenshots/Script-Editor.png)
 
 ### Script Security
 Add a layer of protection on these scripts, require authentication via Basic Auth. Choose to send automn response data back to the client for more granular control, logging and automation possibilities.
 Also set which users have access to the app with some granular controls.
+
 ![Script Security](https://raw.githubusercontent.com/AutomNexus/Automn/main/screenshots/Script-Security.png)
 
 ### Variables
 Variables can be created at the global, collection and script level. There are a number of fixed session/job level variables which can be used in your scripts also.
+
 ![Variables](https://raw.githubusercontent.com/AutomNexus/Automn/main/screenshots/Script-Variables.png)
 
 ### Manual Execution
-Test or run the script as you need through the Automn Host interface. Featured to allow you to post data, you can even save your test data for when you need it
+Test or run the script as you need through the Automn Host interface. Featured to allow you to post data, you can even save your test data for when you need it.
+
 ![Manual Execution](https://raw.githubusercontent.com/AutomNexus/Automn/main/screenshots/Script-Manual-Execution.png)
 
 ## Quick Start with Docker Hub

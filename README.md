@@ -39,7 +39,7 @@ Author your script, create a /endpoint so other systems can call your script, se
 ![Script Editor](https://raw.githubusercontent.com/AutomNexus/Automn/main/screenshots/Script-Editor.png)
 
 ### Script Security
-Add a layer of protection on these scripts, require authentication via Basic Auth. Choose to send automn response data back to the client for more granular control, logging and automation possibilities.
+Add a layer of protection on these scripts, require authentication via opaque bearer token. Choose to send automn response data back to the client for more granular control, logging and automation possibilities.
 Also set which users have access to the app with some granular controls.
 
 ![Script Security](https://raw.githubusercontent.com/AutomNexus/Automn/main/screenshots/Script-Security.png)

@@ -47,6 +47,8 @@ Also set which users have access to the app with some granular controls.
 ### Variables
 Variables can be created at the global, collection and script level. There are a number of fixed session/job level variables which can be used in your scripts also.
 
+This also includes options for secured variables which can be used to store API keys, passwords etc. **This data is unencrypted and added into the script when its sent to the runner, so care must be taken to ensure it won't appear in logs etc.**
+
 ![Variables](https://raw.githubusercontent.com/AutomNexus/Automn/main/screenshots/Script-Variables.png)
 
 ### Manual Execution

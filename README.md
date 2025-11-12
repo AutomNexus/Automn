@@ -54,6 +54,17 @@ Test or run the script as you need through the Automn Host interface. Featured t
 
 ![Manual Execution](https://raw.githubusercontent.com/AutomNexus/Automn/main/screenshots/Script-Manual-Execution.png)
 
+### Themes
+Forget the vibrant theme, dark themes are included.
+
+![Theme Support](https://raw.githubusercontent.com/AutomNexus/Automn/main/screenshots/Themes.png)
+
+### Runner Agents
+Runners can be easily installed and connected to the host to provide a strategic locations to run your scripts. Some runners might need to be installed in specific network locations or on specific hardware to perform their task.
+Manage the runners and monitor their health from the Automn host interface.
+
+![Runner Agents](https://raw.githubusercontent.com/AutomNexus/Automn/main/screenshots/Runner-Agents.png)
+
 ## Quick Start with Docker Hub
 
 In this example, the Automn host and Automn runner will run on the same docker host. Ensure the IP addresses match your dockers host IP.

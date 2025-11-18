@@ -2952,7 +2952,10 @@ app.get(
       res.status(404).json({ error: "User not found" });
       return;
     }
-    res.json({ user });
+    res.json({
+      user,
+      hostVersion: HOST_VERSION,
+    });
   },
 );
 

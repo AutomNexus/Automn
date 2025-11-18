@@ -11,8 +11,8 @@ services:
     ports:
       - "8088:8088"
     volumes:
-      - automn_data:/app/data
-      - automn_logs:/app/logs
+      - ./host-data:/app/data
+      - ./host-logs:/app/logs
     restart: unless-stopped
 
   automn_runner:
@@ -38,9 +38,9 @@ services:
     ports:
       - "3030:3030"
     volumes:
-      - automn_runner_state:/app/state
-      - automn_runner_scripts:/app/scripts
-      - automn_runner_workdir:/app/script_workdir
+      - ./runner-state:/app/state
+      - ./runner-scripts:/app/scripts
+      - ./runner-workdir:/app/script_workdir
     restart: unless-stopped
 
 volumes:

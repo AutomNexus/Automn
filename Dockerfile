@@ -1,5 +1,5 @@
 # ───────────────────────────────
-# 🍂 Automn Dockerfile
+# Automn Dockerfile
 # ───────────────────────────────
 FROM node:22-slim AS base
 WORKDIR /app
@@ -18,12 +18,17 @@ RUN npm run build
 # ───────────────────────────────
 # Build backend
 # ───────────────────────────────
+FROM base AS backend-deps
+WORKDIR /app
+
+COPY package*.json ./
+RUN npm ci --omit=dev
+
 FROM base AS backend
 WORKDIR /app
 
 # Copy backend (everything except node_modules)
-COPY package*.json ./
-RUN npm install --production
+COPY --from=backend-deps /app/node_modules ./node_modules
 COPY . .
 
 # Copy built frontend into public folder for serving

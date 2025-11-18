@@ -2858,10 +2858,9 @@ export default function App() {
                       color: "var(--color-text-strong)",
                       background: "var(--color-surface-2)",
                     }}
-                  >
-                    <span className="text-[10px]">🔄</span>
+                  > 
                     <span>Host version</span>
-                    <span className="font-mono text-[11px] text-slate-200">
+                    <span className="font-mono text-[9px] text-slate-200">
                       {hostVersion || "Unknown"}
                     </span>
                   </span>

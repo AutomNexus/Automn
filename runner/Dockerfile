@@ -98,7 +98,7 @@ COPY runner ./runner
 RUN mkdir -p /app/state /app/scripts /app/script_workdir
 
 ENV NODE_ENV=production \
-    AUTOMN_RUNNER_VERSION=0.2.01
+    AUTOMN_RUNNER_VERSION=0.2.11
 
 EXPOSE 3030
 

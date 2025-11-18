@@ -394,6 +394,7 @@ export default function App() {
   const [runnersLoaded, setRunnersLoaded] = useState(false);
   const [runnerLoadError, setRunnerLoadError] = useState("");
   const [currentUser, setCurrentUser] = useState(null);
+  const [hostVersion, setHostVersion] = useState(null);
   const [authChecked, setAuthChecked] = useState(false);
   const [loginForm, setLoginForm] = useState({ username: "admin", password: "" });
   const [loginError, setLoginError] = useState("");
@@ -736,11 +737,13 @@ export default function App() {
       const data = await apiRequest("/api/auth/me");
       const user = data?.user || null;
       setCurrentUser(user);
+      setHostVersion(data?.hostVersion || null);
       setIsChangingPassword(user?.mustChangePassword ?? false);
       setAuthChecked(true);
       return user;
     } catch (err) {
       handleAuthError(err);
+      setHostVersion(null);
       setAuthChecked(true);
       return null;
     }
@@ -864,6 +867,7 @@ export default function App() {
       setRunnerHosts([]);
       setRunnersLoaded(false);
       setRunnerLoadError("");
+      setHostVersion(null);
       setPasswordForm({ currentPassword: "", newPassword: "", confirmPassword: "" });
       setPasswordError("");
       setPasswordSuccess("");
@@ -2846,6 +2850,22 @@ export default function App() {
                 <p className="mt-1 text-sm text-slate-400">
                   Personalize Automn and configure system behavior.
                 </p>
+                <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+                  <span
+                    className="inline-flex items-center gap-1 rounded-full border px-3 py-1 font-semibold uppercase tracking-wide"
+                    style={{
+                      borderColor: "var(--color-panel-border)",
+                      color: "var(--color-text-strong)",
+                      background: "var(--color-surface-2)",
+                    }}
+                  >
+                    <span className="text-[10px]">🔄</span>
+                    <span>Host version</span>
+                    <span className="font-mono text-[11px] text-slate-200">
+                      {hostVersion || "Unknown"}
+                    </span>
+                  </span>
+                </div>
               </div>
               <button
                 type="button"
@@ -3678,4 +3698,3 @@ export default function App() {
     </div>
   );
 }
-

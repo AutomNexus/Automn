@@ -29,7 +29,7 @@ const FAVICON_CANDIDATE_PATHS = [
 const DEFAULT_PORT = 3030;
 const DEFAULT_HEARTBEAT_INTERVAL = 60_000;
 const MIN_SECRET_LENGTH = 12;
-const RUNNER_VERSION = "0.2.11";
+const RUNNER_VERSION = "0.2.12";
 const MINIMUM_HOST_VERSION = "0.2.0";
 
 const runtimeExecutableEnv = {
@@ -37,8 +37,8 @@ const runtimeExecutableEnv = {
   python: normalizeExecutableValue(process.env.AUTOMN_RUNNER_PYTHON_PATH || ""),
   powershell: normalizeExecutableValue(
     process.env.AUTOMN_RUNNER_POWERSHELL_PATH ||
-      process.env.AUTOMN_POWERSHELL_PATH ||
-      ""
+    process.env.AUTOMN_POWERSHELL_PATH ||
+    ""
   ),
 };
 
@@ -240,7 +240,7 @@ function detectRuntimeVersion(command, args, key, options = {}) {
       updateRuntimeVersion(key, candidate);
     });
     if (child && typeof child.once === "function") {
-      child.once("error", () => {});
+      child.once("error", () => { });
     }
   } catch (err) {
     // Silently ignore runtime detection failures; metadata is best-effort.
@@ -416,8 +416,8 @@ if (inMemoryState.secretSource === "state" && persistedState.secret) {
 }
 const persistedExecutables =
   persistedState.runtimeExecutables &&
-  typeof persistedState.runtimeExecutables === "object" &&
-  !Array.isArray(persistedState.runtimeExecutables)
+    typeof persistedState.runtimeExecutables === "object" &&
+    !Array.isArray(persistedState.runtimeExecutables)
     ? persistedState.runtimeExecutables
     : null;
 if (persistedExecutables) {
@@ -1095,9 +1095,8 @@ function renderHomePage({ error = null, success = null } = {}) {
       <section>
         <h2 class="locked">Runner locked</h2>
         <p class="muted">This runner successfully registered with the host and is now locked. To rotate secrets, use the documented reset procedure.</p>
-        <p class="muted">Last host response: ${summary.lastRegistrationStatus || "unknown"}${
-      summary.lastRegistrationError ? ` (error: ${summary.lastRegistrationError})` : ""
-    }</p>
+        <p class="muted">Last host response: ${summary.lastRegistrationStatus || "unknown"}${summary.lastRegistrationError ? ` (error: ${summary.lastRegistrationError})` : ""
+      }</p>
       </section>
     `;
   }
@@ -1485,8 +1484,8 @@ app.post("/api/run", async (req, res) => {
       formatted.level === "error"
         ? console.error
         : formatted.level === "warn"
-        ? console.warn
-        : console.log;
+          ? console.warn
+          : console.log;
     const message = String(formatted.message);
     const output = message ? `${prefix} ${message}` : prefix;
     target(output);

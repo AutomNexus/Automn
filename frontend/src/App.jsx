@@ -781,10 +781,10 @@ export default function App() {
             prev.map((item) =>
               uniqueIds.includes(item.id)
                 ? {
-                    ...item,
-                    isRead: true,
-                    readAt: item.readAt || readTimestamp,
-                  }
+                  ...item,
+                  isRead: true,
+                  readAt: item.readAt || readTimestamp,
+                }
                 : item,
             ),
           ),
@@ -931,7 +931,7 @@ export default function App() {
         const preferredSidebarIconStyle = preferences["ui.sidebarIconStyle"];
         const nextSidebarIconStyle =
           typeof preferredSidebarIconStyle === "string" &&
-          VALID_SIDEBAR_ICON_IDS.has(preferredSidebarIconStyle)
+            VALID_SIDEBAR_ICON_IDS.has(preferredSidebarIconStyle)
             ? preferredSidebarIconStyle
             : "icons-left";
 
@@ -1157,29 +1157,29 @@ export default function App() {
 
           const acceptedMethods = Array.isArray(script.acceptedMethods)
             ? script.acceptedMethods
-                .map((method) =>
-                  typeof method === "string" ? method.toUpperCase() : "",
-                )
-                .filter((method) => SUPPORTED_HTTP_METHODS.includes(method))
+              .map((method) =>
+                typeof method === "string" ? method.toUpperCase() : "",
+              )
+              .filter((method) => SUPPORTED_HTTP_METHODS.includes(method))
             : DEFAULT_ACCEPTED_METHODS;
 
           const mappedCategory = script.category
             ? {
-                id: script.category.id,
-                name: (script.category.name || "").trim(),
-                description: script.category.description || "",
-                defaultLanguage: script.category.defaultLanguage || null,
-                defaultRunnerHostId:
-                  script.category.defaultRunnerHostId ||
-                  categoryDefaultRunnerHostId ||
-                  null,
-                defaultRunner:
-                  normalizeRunnerHost(script.category.defaultRunner) ||
-                  categoryDefaultRunner,
-                isSystem: Boolean(script.category.isSystem),
-              }
+              id: script.category.id,
+              name: (script.category.name || "").trim(),
+              description: script.category.description || "",
+              defaultLanguage: script.category.defaultLanguage || null,
+              defaultRunnerHostId:
+                script.category.defaultRunnerHostId ||
+                categoryDefaultRunnerHostId ||
+                null,
+              defaultRunner:
+                normalizeRunnerHost(script.category.defaultRunner) ||
+                categoryDefaultRunner,
+              isSystem: Boolean(script.category.isSystem),
+            }
             : categoryId
-            ? {
+              ? {
                 id: categoryId,
                 name: categoryName,
                 description: "",
@@ -1188,7 +1188,7 @@ export default function App() {
                 defaultRunner: categoryDefaultRunner,
                 isSystem: false,
               }
-            : null;
+              : null;
 
           return {
             ...script,
@@ -1289,8 +1289,8 @@ export default function App() {
       const list = Array.isArray(response?.collections)
         ? response.collections
         : Array.isArray(response?.categories)
-        ? response.categories
-        : [];
+          ? response.categories
+          : [];
       const normalized = list.map((category) => ({
         id: category.id,
         name: (category.name || "").trim(),
@@ -1492,10 +1492,10 @@ export default function App() {
       .map(([key, { display, scripts: projectScripts }]) => {
         const filtered = query
           ? projectScripts.filter((script) => {
-              const name = (script.name || "").toLowerCase();
-              const endpoint = (script.endpoint || "").toLowerCase();
-              return name.includes(query) || endpoint.includes(query);
-            })
+            const name = (script.name || "").toLowerCase();
+            const endpoint = (script.endpoint || "").toLowerCase();
+            return name.includes(query) || endpoint.includes(query);
+          })
           : projectScripts;
 
         if (filtered.length === 0) return null;
@@ -1969,32 +1969,32 @@ export default function App() {
         prev.map((item) =>
           item.id === script.id
             ? {
-                ...item,
-                runMethod: method,
-                runHeaders: headers,
-                runBody: bodyRaw || "",
-              }
+              ...item,
+              runMethod: method,
+              runHeaders: headers,
+              runBody: bodyRaw || "",
+            }
             : item,
         ),
       );
       setSelected((prev) =>
         prev?.id === script.id
           ? {
-              ...prev,
-              runMethod: method,
-              runHeaders: headers,
-              runBody: bodyRaw || "",
-            }
+            ...prev,
+            runMethod: method,
+            runHeaders: headers,
+            runBody: bodyRaw || "",
+          }
           : prev,
       );
       setRunModalScript((prev) =>
         prev?.id === script.id
           ? {
-              ...prev,
-              runMethod: method,
-              runHeaders: headers,
-              runBody: bodyRaw || "",
-            }
+            ...prev,
+            runMethod: method,
+            runHeaders: headers,
+            runBody: bodyRaw || "",
+          }
           : prev,
       );
     },
@@ -2024,10 +2024,10 @@ export default function App() {
     const normalizedMethod = method?.toUpperCase?.() || "POST";
     const allowedMethods = Array.isArray(script.acceptedMethods)
       ? script.acceptedMethods
-          .map((value) =>
-            typeof value === "string" ? value.toUpperCase() : "",
-          )
-          .filter((value) => SUPPORTED_HTTP_METHODS.includes(value))
+        .map((value) =>
+          typeof value === "string" ? value.toUpperCase() : "",
+        )
+        .filter((value) => SUPPORTED_HTTP_METHODS.includes(value))
       : DEFAULT_ACCEPTED_METHODS;
     const allowedMethodSet = new Set(allowedMethods);
     if (allowedMethodSet.size > 0 && !allowedMethodSet.has(normalizedMethod)) {
@@ -2122,8 +2122,8 @@ export default function App() {
   const noResultsMessage = isSearching
     ? `No scripts match "${searchTerm}".`
     : hasNonRecycled
-    ? "No scripts available."
-    : "No scripts yet.";
+      ? "No scripts available."
+      : "No scripts yet.";
   const selectedLanguageIcon = selected
     ? getScriptIcon(selected.language)
     : null;
@@ -2365,11 +2365,10 @@ export default function App() {
                   <div key={key} className="py-1">
                     <button
                       onClick={() => !isSearching && toggleCategory(key)}
-                      className={`w-full flex items-center justify-between px-4 py-2 text-xs font-semibold uppercase tracking-wide transition-colors ${
-                        isSearching
+                      className={`w-full flex items-center justify-between px-4 py-2 text-xs font-semibold uppercase tracking-wide transition-colors ${isSearching
                           ? "text-slate-300"
                           : "text-slate-400 hover:text-slate-200"
-                      }`}
+                        }`}
                     >
                       <span className="flex items-center gap-2">
                         <span>{isCollapsed ? "▸" : "▾"}</span>
@@ -2404,11 +2403,11 @@ export default function App() {
                           }
                           const accentStyle = colored
                             ? {
-                                "--sidebar-script-accent-border": accent.border,
-                                "--sidebar-script-accent-bg": accent.background,
-                                "--sidebar-script-accent-hover": accent.hover,
-                                "--sidebar-script-accent-text": accent.text,
-                              }
+                              "--sidebar-script-accent-border": accent.border,
+                              "--sidebar-script-accent-bg": accent.background,
+                              "--sidebar-script-accent-hover": accent.hover,
+                              "--sidebar-script-accent-text": accent.text,
+                            }
                             : undefined;
                           const leadingElements = [];
                           if (sidebarIconStyle === "icons-left") {
@@ -2446,9 +2445,8 @@ export default function App() {
                               style={accentStyle}
                             >
                               <div
-                                className={`text-sm font-medium flex items-center ${
-                                  trailingIcon ? "justify-between gap-3" : "gap-2"
-                                }`}
+                                className={`text-sm font-medium flex items-center ${trailingIcon ? "justify-between gap-3" : "gap-2"
+                                  }`}
                               >
                                 <span className="flex min-w-0 items-center gap-2">
                                   {leadingElements}
@@ -2477,11 +2475,10 @@ export default function App() {
             <button
               onClick={handleCreate}
               disabled={isDraftInitializing}
-              className={`inline-flex w-full items-center justify-center gap-2 rounded-md border px-4 py-2 text-sm font-medium transition focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-900 ${
-                isDraftInitializing
+              className={`inline-flex w-full items-center justify-center gap-2 rounded-md border px-4 py-2 text-sm font-medium transition focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-900 ${isDraftInitializing
                   ? "cursor-not-allowed border-slate-700 bg-slate-800 text-slate-400 opacity-75"
                   : "border-slate-700 bg-slate-800 text-slate-100 hover:border-sky-500/60 hover:bg-slate-700 focus:ring-sky-500/60"
-              }`}
+                }`}
             >
               <span aria-hidden="true" className="text-base text-sky-300">
                 ＋
@@ -2510,9 +2507,8 @@ export default function App() {
                 return next;
               })
             }
-            className={`w-full px-4 py-3 flex items-center justify-between text-sm font-medium transition-colors ${
-              isRecycleOpen ? "bg-slate-800 text-sky-300" : "text-slate-300 hover:text-slate-100"
-            }`}
+            className={`w-full px-4 py-3 flex items-center justify-between text-sm font-medium transition-colors ${isRecycleOpen ? "bg-slate-800 text-sky-300" : "text-slate-300 hover:text-slate-100"
+              }`}
           >
             <span className="flex items-center gap-2">
               {systemIcons.recycle && (
@@ -2558,11 +2554,11 @@ export default function App() {
                   }
                   const accentStyle = colored
                     ? {
-                        "--sidebar-script-accent-border": accent.border,
-                        "--sidebar-script-accent-bg": accent.background,
-                        "--sidebar-script-accent-hover": accent.hover,
-                        "--sidebar-script-accent-text": accent.text,
-                      }
+                      "--sidebar-script-accent-border": accent.border,
+                      "--sidebar-script-accent-bg": accent.background,
+                      "--sidebar-script-accent-hover": accent.hover,
+                      "--sidebar-script-accent-text": accent.text,
+                    }
                     : undefined;
                   const leadingElements = [];
                   if (sidebarIconStyle === "icons-left") {
@@ -2600,9 +2596,8 @@ export default function App() {
                       style={accentStyle}
                     >
                       <div
-                        className={`font-medium flex items-center ${
-                          trailingIcon ? "justify-between gap-3" : "gap-2"
-                        }`}
+                        className={`font-medium flex items-center ${trailingIcon ? "justify-between gap-3" : "gap-2"
+                          }`}
                       >
                         <span className="flex min-w-0 items-center gap-2">
                           {leadingElements}
@@ -2645,11 +2640,10 @@ export default function App() {
                 return next;
               })
             }
-            className={`w-full px-4 py-3 flex items-center justify-between text-sm font-medium transition-colors ${
-              isNotificationsOpen
+            className={`w-full px-4 py-3 flex items-center justify-between text-sm font-medium transition-colors ${isNotificationsOpen
                 ? "bg-slate-800 text-sky-300"
                 : "text-slate-300 hover:text-slate-100"
-            }`}
+              }`}
           >
             <span className="flex items-center gap-2">
               {systemIcons.notifications && (
@@ -2684,11 +2678,10 @@ export default function App() {
                     type="button"
                     onClick={() => handleMarkNotificationsRead(unreadNotificationIds)}
                     disabled={unreadNotificationIds.length === 0}
-                    className={`rounded border px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide transition ${
-                      unreadNotificationIds.length === 0
+                    className={`rounded border px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide transition ${unreadNotificationIds.length === 0
                         ? "cursor-not-allowed border-slate-800 text-slate-600"
                         : "border-slate-700 text-slate-300 hover:border-sky-500 hover:text-sky-300"
-                    }`}
+                      }`}
                   >
                     Mark all as read
                   </button>
@@ -2713,9 +2706,8 @@ export default function App() {
                       return (
                         <li
                           key={notification.id}
-                          className={`notification-card${
-                            isUnread ? " notification-card--unread" : ""
-                          } rounded border p-3 text-sm transition`}
+                          className={`notification-card${isUnread ? " notification-card--unread" : ""
+                            } rounded border p-3 text-sm transition`}
                         >
                           <div className="flex items-center justify-between gap-2 text-xs">
                             <span
@@ -2852,15 +2844,15 @@ export default function App() {
                 </p>
                 <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
                   <span
-                    className="inline-flex items-center gap-1 rounded-full border px-3 py-1 font-semibold uppercase tracking-wide"
+                    className="inline-flex items-center gap-1 rounded-full border px-3 py-1 text-xs"
                     style={{
                       borderColor: "var(--color-panel-border)",
-                      color: "var(--color-text-strong)",
+                      color: "var(--color-text-muted)",
                       background: "var(--color-surface-2)",
                     }}
-                  > 
-                    <span>Host version</span>
-                    <span className="font-mono text-[9px] text-slate-200">
+                  >
+                    <span>Host Version:</span>
+                    <span>
                       {hostVersion || "Unknown"}
                     </span>
                   </span>
@@ -2874,33 +2866,32 @@ export default function App() {
                 Close
               </button>
             </div>
-        <div className="flex flex-1 flex-col min-h-0">
-          <nav
-            className="border-b"
-            style={{ borderColor: "var(--color-divider)" }}
-            aria-label="Settings sections"
-          >
-            <div className="flex flex-wrap items-center gap-4 px-4">
-              {visibleSettingsTabs.map((tab) => {
-                const isActive = settingsTab === tab.id;
-                return (
-                  <button
-                    key={tab.id}
-                    type="button"
-                    onClick={() => setSettingsTab(tab.id)}
-                    className={`whitespace-nowrap border-b-2 pb-3 pt-4 text-xs font-semibold uppercase tracking-wide transition-colors ${
-                      isActive
-                        ? "border-sky-400 text-sky-300"
-                        : "border-transparent text-slate-400 hover:text-slate-200"
-                    }`}
-                  >
-                    {tab.label}
-                  </button>
-                );
-              })}
-            </div>
-          </nav>
-          <div className="flex-1 overflow-y-auto p-4">
+            <div className="flex flex-1 flex-col min-h-0">
+              <nav
+                className="border-b"
+                style={{ borderColor: "var(--color-divider)" }}
+                aria-label="Settings sections"
+              >
+                <div className="flex flex-wrap items-center gap-4 px-4">
+                  {visibleSettingsTabs.map((tab) => {
+                    const isActive = settingsTab === tab.id;
+                    return (
+                      <button
+                        key={tab.id}
+                        type="button"
+                        onClick={() => setSettingsTab(tab.id)}
+                        className={`whitespace-nowrap border-b-2 pb-3 pt-4 text-xs font-semibold uppercase tracking-wide transition-colors ${isActive
+                            ? "border-sky-400 text-sky-300"
+                            : "border-transparent text-slate-400 hover:text-slate-200"
+                          }`}
+                      >
+                        {tab.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </nav>
+              <div className="flex-1 overflow-y-auto p-4">
                 {settingsTab === "ui" && (
                   <div className="space-y-6">
                     <div>
@@ -2920,11 +2911,10 @@ export default function App() {
                             key={theme.id}
                             type="button"
                             onClick={() => setThemeId(theme.id)}
-                            className={`flex h-full flex-col justify-between rounded-lg border p-3 text-left transition-shadow ${
-                              isActive
+                            className={`flex h-full flex-col justify-between rounded-lg border p-3 text-left transition-shadow ${isActive
                                 ? "border-sky-500 shadow-lg"
                                 : "border-slate-800 hover:border-sky-500"
-                            }`}
+                              }`}
                             style={{
                               background: "var(--color-surface-1)",
                               color: "var(--color-app-text)",
@@ -2971,11 +2961,10 @@ export default function App() {
                             </div>
                             <div className="mt-3 flex items-center gap-2 text-xs text-slate-400">
                               <span
-                                className={`flex h-4 w-4 items-center justify-center rounded-full border ${
-                                  isActive
+                                className={`flex h-4 w-4 items-center justify-center rounded-full border ${isActive
                                     ? "border-sky-500 bg-sky-300"
                                     : "border-slate-700"
-                                }`}
+                                  }`}
                                 aria-hidden="true"
                               >
                                 {isActive && (
@@ -3247,19 +3236,19 @@ export default function App() {
                 {!["ui", "collections", "global-variables", "data", "users", "runners"].includes(
                   settingsTab,
                 ) && (
-                  <div className="flex h-full items-center justify-center rounded border border-dashed border-slate-800 bg-slate-900/40 p-6 text-center text-sm text-slate-400">
-                    <div>
-                      <p className="font-semibold text-slate-200">
-                        {SETTINGS_TABS.find((tab) => tab.id === settingsTab)?.label}
-                        {" "}
-                        settings are coming soon.
-                      </p>
-                      <p className="mt-2 text-slate-400">
-                        We're designing focused controls for this area.
-                      </p>
+                    <div className="flex h-full items-center justify-center rounded border border-dashed border-slate-800 bg-slate-900/40 p-6 text-center text-sm text-slate-400">
+                      <div>
+                        <p className="font-semibold text-slate-200">
+                          {SETTINGS_TABS.find((tab) => tab.id === settingsTab)?.label}
+                          {" "}
+                          settings are coming soon.
+                        </p>
+                        <p className="mt-2 text-slate-400">
+                          We're designing focused controls for this area.
+                        </p>
+                      </div>
                     </div>
-                  </div>
-                )}
+                  )}
               </div>
             </div>
           </div>
@@ -3370,11 +3359,10 @@ export default function App() {
                       <button
                         key={tab}
                         onClick={() => setActiveTab(tab)}
-                        className={`capitalize transition-colors ${
-                          activeTab === tab
+                        className={`capitalize transition-colors ${activeTab === tab
                             ? "text-sky-400 border-b-2 border-sky-400 pb-1"
                             : "text-gray-400 hover:text-gray-200"
-                        }`}
+                          }`}
                       >
                         <span className="capitalize">{label}</span>
                       </button>
@@ -3576,11 +3564,10 @@ export default function App() {
                 type="button"
                 onClick={() => handleMarkNotificationsRead(unreadNotificationIds)}
                 disabled={unreadNotificationIds.length === 0}
-                className={`rounded border px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide transition ${
-                  unreadNotificationIds.length === 0
+                className={`rounded border px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide transition ${unreadNotificationIds.length === 0
                     ? "cursor-not-allowed border-slate-800 text-slate-600"
                     : "border-slate-700 text-slate-300 hover:border-sky-500 hover:text-sky-300"
-                }`}
+                  }`}
               >
                 Mark all as read
               </button>
@@ -3606,9 +3593,8 @@ export default function App() {
                     return (
                       <li
                         key={notification.id}
-                        className={`notification-card${
-                          isUnread ? " notification-card--unread" : ""
-                        } rounded border p-4 text-sm transition`}
+                        className={`notification-card${isUnread ? " notification-card--unread" : ""
+                          } rounded border p-4 text-sm transition`}
                       >
                         <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
                           <span
@@ -3628,9 +3614,8 @@ export default function App() {
                               </span>
                             </div>
                             <span
-                              className={`notification-status text-[10px] uppercase tracking-wide${
-                                isUnread ? " notification-status--unread" : ""
-                              }`}
+                              className={`notification-status text-[10px] uppercase tracking-wide${isUnread ? " notification-status--unread" : ""
+                                }`}
                             >
                               {isUnread ? "Unread" : "Read"}
                             </span>

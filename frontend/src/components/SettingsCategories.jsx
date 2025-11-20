@@ -9,11 +9,8 @@ const DEFAULT_CATEGORY_ID = DEFAULT_COLLECTION_ID;
 const LANGUAGE_OPTIONS = [
   { value: "", label: "No default" },
   { value: "node", label: "Node JS" },
-  { value: "javascript", label: "JavaScript" },
-  { value: "typescript", label: "TypeScript" },
   { value: "python", label: "Python" },
   { value: "powershell", label: "PowerShell" },
-  { value: "shell", label: "Shell" },
 ];
 
 const normalizeCategory = (entry) => ({
@@ -171,8 +168,8 @@ export default function SettingsCategories({ onAuthError, onCategoryChange }) {
       const list = Array.isArray(response?.collections)
         ? response.collections.map(normalizeCategory)
         : Array.isArray(response?.categories)
-        ? response.categories.map(normalizeCategory)
-        : [];
+          ? response.categories.map(normalizeCategory)
+          : [];
       const sorted = sortCategories(list);
       setCategories(sorted);
 
@@ -258,12 +255,12 @@ export default function SettingsCategories({ onAuthError, onCategoryChange }) {
         : [];
       const normalizedUsers = Array.isArray(payload?.users)
         ? sortUsersByName(
-            payload.users.map((user) => ({
-              id: user.id,
-              username: user.username,
-              isAdmin: Boolean(user.isAdmin),
-            })),
-          )
+          payload.users.map((user) => ({
+            id: user.id,
+            username: user.username,
+            isAdmin: Boolean(user.isAdmin),
+          })),
+        )
         : [];
 
       setPermissions(normalizedPermissions);
@@ -733,11 +730,10 @@ export default function SettingsCategories({ onAuthError, onCategoryChange }) {
                     key={category.id}
                     type="button"
                     onClick={() => setSelectedCategoryId(category.id)}
-                    className={`w-full rounded border px-3 py-2 text-left text-sm transition-colors ${
-                      isActive
+                    className={`w-full rounded border px-3 py-2 text-left text-sm transition-colors ${isActive
                         ? "border-sky-500/60 bg-sky-500/10 text-sky-200"
                         : "border-transparent bg-slate-900 text-slate-300 hover:border-slate-700 hover:bg-slate-800"
-                    }`}
+                      }`}
                   >
                     <div className="flex items-center justify-between gap-2">
                       <span className="font-semibold">{category.name || "Untitled"}</span>

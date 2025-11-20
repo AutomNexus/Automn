@@ -131,9 +131,9 @@ const NOTIFICATION_LEVEL_CLASSNAMES = {
 };
 
 const SYSTEM_ICON_DEFAULTS = {
-  recycle: true,
-  settings: true,
-  notifications: true,
+  recycle: false,
+  settings: false,
+  notifications: false,
 };
 
 const SETTINGS_TABS = [
@@ -2366,8 +2366,8 @@ export default function App() {
                     <button
                       onClick={() => !isSearching && toggleCategory(key)}
                       className={`w-full flex items-center justify-between px-4 py-2 text-xs font-semibold uppercase tracking-wide transition-colors ${isSearching
-                          ? "text-slate-300"
-                          : "text-slate-400 hover:text-slate-200"
+                        ? "text-slate-300"
+                        : "text-slate-400 hover:text-slate-200"
                         }`}
                     >
                       <span className="flex items-center gap-2">
@@ -2476,8 +2476,8 @@ export default function App() {
               onClick={handleCreate}
               disabled={isDraftInitializing}
               className={`inline-flex w-full items-center justify-center gap-2 rounded-md border px-4 py-2 text-sm font-medium transition focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-900 ${isDraftInitializing
-                  ? "cursor-not-allowed border-slate-700 bg-slate-800 text-slate-400 opacity-75"
-                  : "border-slate-700 bg-slate-800 text-slate-100 hover:border-sky-500/60 hover:bg-slate-700 focus:ring-sky-500/60"
+                ? "cursor-not-allowed border-slate-700 bg-slate-800 text-slate-400 opacity-75"
+                : "border-slate-700 bg-slate-800 text-slate-100 hover:border-sky-500/60 hover:bg-slate-700 focus:ring-sky-500/60"
                 }`}
             >
               <span aria-hidden="true" className="text-base text-sky-300">
@@ -2641,8 +2641,8 @@ export default function App() {
               })
             }
             className={`w-full px-4 py-3 flex items-center justify-between text-sm font-medium transition-colors ${isNotificationsOpen
-                ? "bg-slate-800 text-sky-300"
-                : "text-slate-300 hover:text-slate-100"
+              ? "bg-slate-800 text-sky-300"
+              : "text-slate-300 hover:text-slate-100"
               }`}
           >
             <span className="flex items-center gap-2">
@@ -2679,8 +2679,8 @@ export default function App() {
                     onClick={() => handleMarkNotificationsRead(unreadNotificationIds)}
                     disabled={unreadNotificationIds.length === 0}
                     className={`rounded border px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide transition ${unreadNotificationIds.length === 0
-                        ? "cursor-not-allowed border-slate-800 text-slate-600"
-                        : "border-slate-700 text-slate-300 hover:border-sky-500 hover:text-sky-300"
+                      ? "cursor-not-allowed border-slate-800 text-slate-600"
+                      : "border-slate-700 text-slate-300 hover:border-sky-500 hover:text-sky-300"
                       }`}
                   >
                     Mark all as read
@@ -2881,8 +2881,8 @@ export default function App() {
                         type="button"
                         onClick={() => setSettingsTab(tab.id)}
                         className={`whitespace-nowrap border-b-2 pb-3 pt-4 text-xs font-semibold uppercase tracking-wide transition-colors ${isActive
-                            ? "border-sky-400 text-sky-300"
-                            : "border-transparent text-slate-400 hover:text-slate-200"
+                          ? "border-sky-400 text-sky-300"
+                          : "border-transparent text-slate-400 hover:text-slate-200"
                           }`}
                       >
                         {tab.label}
@@ -2912,8 +2912,8 @@ export default function App() {
                             type="button"
                             onClick={() => setThemeId(theme.id)}
                             className={`flex h-full flex-col justify-between rounded-lg border p-3 text-left transition-shadow ${isActive
-                                ? "border-sky-500 shadow-lg"
-                                : "border-slate-800 hover:border-sky-500"
+                              ? "border-sky-500 shadow-lg"
+                              : "border-slate-800 hover:border-sky-500"
                               }`}
                             style={{
                               background: "var(--color-surface-1)",
@@ -2962,8 +2962,8 @@ export default function App() {
                             <div className="mt-3 flex items-center gap-2 text-xs text-slate-400">
                               <span
                                 className={`flex h-4 w-4 items-center justify-center rounded-full border ${isActive
-                                    ? "border-sky-500 bg-sky-300"
-                                    : "border-slate-700"
+                                  ? "border-sky-500 bg-sky-300"
+                                  : "border-slate-700"
                                   }`}
                                 aria-hidden="true"
                               >
@@ -3360,8 +3360,8 @@ export default function App() {
                         key={tab}
                         onClick={() => setActiveTab(tab)}
                         className={`capitalize transition-colors ${activeTab === tab
-                            ? "text-sky-400 border-b-2 border-sky-400 pb-1"
-                            : "text-gray-400 hover:text-gray-200"
+                          ? "text-sky-400 border-b-2 border-sky-400 pb-1"
+                          : "text-gray-400 hover:text-gray-200"
                           }`}
                       >
                         <span className="capitalize">{label}</span>
@@ -3565,8 +3565,8 @@ export default function App() {
                 onClick={() => handleMarkNotificationsRead(unreadNotificationIds)}
                 disabled={unreadNotificationIds.length === 0}
                 className={`rounded border px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide transition ${unreadNotificationIds.length === 0
-                    ? "cursor-not-allowed border-slate-800 text-slate-600"
-                    : "border-slate-700 text-slate-300 hover:border-sky-500 hover:text-sky-300"
+                  ? "cursor-not-allowed border-slate-800 text-slate-600"
+                  : "border-slate-700 text-slate-300 hover:border-sky-500 hover:text-sky-300"
                   }`}
               >
                 Mark all as read

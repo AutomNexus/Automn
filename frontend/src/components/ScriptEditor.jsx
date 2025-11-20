@@ -346,8 +346,8 @@ export default function ScriptEditor({
   const runnerSelectValue = runnerHostId
     ? runnerHostId
     : inheritCategoryRunner
-    ? ""
-    : NO_RUNNER_VALUE;
+      ? ""
+      : NO_RUNNER_VALUE;
 
   const hasAdminOnlyRunner = useMemo(
     () => normalizedRunnerHosts.some((runner) => runner.adminOnly),
@@ -417,18 +417,18 @@ export default function ScriptEditor({
       if (script.id) {
         setCategoryId(
           script.collectionId ||
-            script.collection?.id ||
-            script.categoryId ||
-            script.category?.id ||
-            DEFAULT_CATEGORY_ID,
+          script.collection?.id ||
+          script.categoryId ||
+          script.category?.id ||
+          DEFAULT_CATEGORY_ID,
         );
       } else {
         setCategoryId(
           script.collectionId ||
-            script.collection?.id ||
-            script.categoryId ||
-            script.category?.id ||
-            "",
+          script.collection?.id ||
+          script.categoryId ||
+          script.category?.id ||
+          "",
         );
       }
       setRunnerHostId(script.runnerHostId || "");
@@ -498,8 +498,8 @@ export default function ScriptEditor({
         const scriptList = Array.isArray(data?.scriptVariables)
           ? data.scriptVariables
           : Array.isArray(data?.variables)
-          ? data.variables
-          : [];
+            ? data.variables
+            : [];
         const categoryList = Array.isArray(data?.categoryVariables)
           ? data.categoryVariables
           : [];
@@ -559,8 +559,8 @@ export default function ScriptEditor({
         const baseLabel = variable.name
           ? `${variable.name} (${variable.envName})`
           : variable.label
-          ? `${variable.label} (${variable.envName})`
-          : variable.envName;
+            ? `${variable.label} (${variable.envName})`
+            : variable.envName;
         const scopeLabel = `${scope} • ${baseLabel}`;
         options.push({
           id: variable.id || `${scope}-${variable.envName}`,
@@ -880,19 +880,18 @@ export default function ScriptEditor({
           <p className="mt-1 text-xs text-slate-400">
             {runnerHostId
               ? selectedRunner
-                ? `This script will always run on ${
-                    selectedRunner.name ||
-                    selectedRunner.id ||
-                    runnerHostId
-                  }.`
+                ? `This script will always run on ${selectedRunner.name ||
+                selectedRunner.id ||
+                runnerHostId
+                }.`
                 : "This script will use the selected runner."
               : !inheritCategoryRunner
-              ? "This script is disabled and will respond with 'No runners configured' until a runner is assigned."
-              : categoryDefaultRunner
-              ? `This script will inherit the collection default runner (${categoryDefaultRunner.name || categoryDefaultRunnerHostId || "Runner"}).`
-              : normalizedRunnerHosts.length > 0
-              ? "Assign a runner, inherit the collection default, or choose 'No assigned runner' to keep this script idle."
-              : "No runners are currently available. Configure a runner or disable inheritance before saving."}
+                ? "This script is disabled and will respond with 'No runners configured' until a runner is assigned."
+                : categoryDefaultRunner
+                  ? `This script will inherit the collection default runner (${categoryDefaultRunner.name || categoryDefaultRunnerHostId || "Runner"}).`
+                  : normalizedRunnerHosts.length > 0
+                    ? "Assign a runner, inherit the collection default, or choose 'No assigned runner' to keep this script idle."
+                    : "No runners are currently available. Configure a runner or disable inheritance before saving."}
           </p>
           {!canSelectAdminOnly && hasAdminOnlyRunner && (
             <p className="mt-1 text-xs text-amber-200">
@@ -909,11 +908,8 @@ export default function ScriptEditor({
             onChange={(e) => setLanguage(e.target.value)}
           >
             <option value="node">Node JS</option>
-            <option value="javascript">JavaScript</option>
-            <option value="typescript">TypeScript</option>
             <option value="python">Python</option>
             <option value="powershell">PowerShell</option>
-            <option value="shell">Shell</option>
           </select>
         </div>
 

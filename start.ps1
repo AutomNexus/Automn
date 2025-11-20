@@ -1,0 +1,1 @@
+npm install && npm --prefix frontend install && npm --prefix frontend run build

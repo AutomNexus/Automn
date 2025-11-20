@@ -139,6 +139,34 @@ const RUNNER_STATUS = Object.freeze({
 const RUNNER_HEALTH_WINDOW_MS = 2 * 60 * 1000;
 const MIN_RUNNER_SECRET_LENGTH = 12;
 
+function resolveFrontendDir() {
+  const publicDir = path.join(__dirname, "public");
+  const distDir = path.join(__dirname, "frontend", "dist");
+
+  const hasIndex = (dir) => {
+    try {
+      return fs.existsSync(path.join(dir, "index.html"));
+    } catch (err) {
+      return false;
+    }
+  };
+
+  if (hasIndex(publicDir)) {
+    return publicDir;
+  }
+
+  if (hasIndex(distDir)) {
+    console.log("Serving frontend from frontend/dist; public/ directory not found.");
+    return distDir;
+  }
+
+  console.warn(
+    "No built frontend detected. Run `npm --prefix frontend run build` to generate static assets.",
+  );
+  return publicDir;
+}
+
+
 function generateRunnerSecret() {
   try {
     return crypto.randomBytes(24).toString("base64url");
@@ -946,8 +974,8 @@ function normalizeRunResultPayload(result, context) {
     stderr: typeof result?.stderr === "string"
       ? result.stderr
       : result?.stderr
-      ? String(result.stderr)
-      : "",
+        ? String(result.stderr)
+        : "",
     code: normalizedCode,
     duration:
       Number.isFinite(result?.duration) && result.duration >= 0
@@ -1032,8 +1060,8 @@ async function createRunTracker({
       typeof normalized.stderr === "string"
         ? normalized.stderr
         : normalized.stderr
-        ? String(normalized.stderr)
-        : "";
+          ? String(normalized.stderr)
+          : "";
     const trimmedStderr = rawStderr.trim();
     const success = normalized.code === 0 && !trimmedStderr;
     const persistedStderr =
@@ -1761,14 +1789,15 @@ async function decryptBackupBuffer(buffer, password) {
 }
 
 // Serve the built frontend (React app)
-app.use(express.static(path.join(__dirname, "public")));
+const frontendDir = resolveFrontendDir();
+app.use(express.static(frontendDir));
 
 app.get("/", (req, res) => {
-  res.sendFile(path.join(__dirname, "public", "index.html"));
+  res.sendFile(path.join(frontendDir, "index.html"));
 });
 
 app.get("/script/:endpoint", (req, res) => {
-  res.sendFile(path.join(__dirname, "public", "index.html"));
+  res.sendFile(path.join(frontendDir, "index.html"));
 });
 
 function parseEnvBoolean(value, defaultValue = false) {
@@ -1921,8 +1950,8 @@ async function loadScriptPackages(scriptId) {
   );
   return Array.isArray(rows)
     ? rows
-        .map(mapPackageRow)
-        .filter((entry) => entry && entry.name)
+      .map(mapPackageRow)
+      .filter((entry) => entry && entry.name)
     : [];
 }
 
@@ -1944,8 +1973,8 @@ async function replaceScriptPackages(scriptId, packageNames = []) {
   const existing = new Set(
     Array.isArray(existingRows)
       ? existingRows
-          .map((row) => normalizePackageName(row?.name))
-          .filter((name) => Boolean(name))
+        .map((row) => normalizePackageName(row?.name))
+        .filter((name) => Boolean(name))
       : [],
   );
 
@@ -2425,12 +2454,12 @@ function mapScriptRow(
   if (!row) return null;
   const categoryRow = row.category_id
     ? {
-        id: row.category_id,
-        name: row.category_name || "",
-        description: row.category_description || "",
-        default_language: row.category_default_language || null,
-        is_system: row.category_is_system,
-      }
+      id: row.category_id,
+      name: row.category_name || "",
+      description: row.category_description || "",
+      default_language: row.category_default_language || null,
+      is_system: row.category_is_system,
+    }
     : null;
   const permissions = computeEffectivePermissions({
     user,
@@ -2455,24 +2484,24 @@ function mapScriptRow(
   const runnerHostId = row.runner_host_id || null;
   const scriptRunner = runnerHostId
     ? {
-        id: runnerHostId,
-        name: row.script_runner_name || runnerHostId,
-        status: row.script_runner_status || RUNNER_STATUS.PENDING,
-        statusMessage: row.script_runner_status_message || null,
-        adminOnly: normalizeDbBoolean(row.script_runner_admin_only),
-      }
+      id: runnerHostId,
+      name: row.script_runner_name || runnerHostId,
+      status: row.script_runner_status || RUNNER_STATUS.PENDING,
+      statusMessage: row.script_runner_status_message || null,
+      adminOnly: normalizeDbBoolean(row.script_runner_admin_only),
+    }
     : null;
 
   const categoryDefaultRunnerHostId =
     row.category_default_runner_host_id || null;
   const categoryDefaultRunner = categoryDefaultRunnerHostId
     ? {
-        id: categoryDefaultRunnerHostId,
-        name: row.category_runner_name || categoryDefaultRunnerHostId,
-        status: row.category_runner_status || RUNNER_STATUS.PENDING,
-        statusMessage: row.category_runner_status_message || null,
-        adminOnly: normalizeDbBoolean(row.category_runner_admin_only),
-      }
+      id: categoryDefaultRunnerHostId,
+      name: row.category_runner_name || categoryDefaultRunnerHostId,
+      status: row.category_runner_status || RUNNER_STATUS.PENDING,
+      statusMessage: row.category_runner_status_message || null,
+      adminOnly: normalizeDbBoolean(row.category_runner_admin_only),
+    }
     : null;
 
   const inheritCategoryRunner = row.inherit_category_runner !== 0;
@@ -2483,12 +2512,12 @@ function mapScriptRow(
 
   const category = categoryRow
     ? {
-        id: categoryRow.id,
-        name: categoryRow.name || "",
-        description: categoryRow.description || "",
-        defaultLanguage: categoryRow.default_language || null,
-        isSystem: normalizeDbBoolean(categoryRow.is_system),
-      }
+      id: categoryRow.id,
+      name: categoryRow.name || "",
+      description: categoryRow.description || "",
+      defaultLanguage: categoryRow.default_language || null,
+      isSystem: normalizeDbBoolean(categoryRow.is_system),
+    }
     : null;
   const collection = category;
 
@@ -2717,7 +2746,7 @@ async function ensureCategoryAccess(options = {}) {
       // Allow baseline read/write access to the General collection for all users so
       // they can assign scripts to it without granting broader management rights.
     } else if (!permissions[requiredPermission]) {
-    const err = new Error("You do not have permission to access this collection");
+      const err = new Error("You do not have permission to access this collection");
       err.status = 403;
       throw err;
     }
@@ -2745,16 +2774,16 @@ async function authenticateRequest(req) {
     }
 
     if (!session.expires_at || new Date(session.expires_at).getTime() <= Date.now()) {
-      await dbRun("DELETE FROM sessions WHERE id=?", [session.session_id]).catch(() => {});
+      await dbRun("DELETE FROM sessions WHERE id=?", [session.session_id]).catch(() => { });
       return null;
     }
 
     if (!session.is_active) {
-      await dbRun("DELETE FROM sessions WHERE id=?", [session.session_id]).catch(() => {});
+      await dbRun("DELETE FROM sessions WHERE id=?", [session.session_id]).catch(() => { });
       return null;
     }
 
-    await dbRun("UPDATE sessions SET last_seen=? WHERE id=?", [new Date().toISOString(), session.session_id]).catch(() => {});
+    await dbRun("UPDATE sessions SET last_seen=? WHERE id=?", [new Date().toISOString(), session.session_id]).catch(() => { });
 
     return {
       sessionId: session.session_id,
@@ -2848,12 +2877,12 @@ async function restoreDatabaseFromFile(filePath) {
     attached = false;
   } catch (err) {
     if (transactionActive) {
-      await dbRun("ROLLBACK").catch(() => {});
+      await dbRun("ROLLBACK").catch(() => { });
       transactionActive = false;
     }
 
     if (attached) {
-      await dbRun("DETACH DATABASE restore_src").catch(() => {});
+      await dbRun("DETACH DATABASE restore_src").catch(() => { });
       attached = false;
     }
     throw err;
@@ -2911,7 +2940,7 @@ app.post("/api/auth/login", async (req, res) => {
     );
 
     await dbRun(`UPDATE users SET last_login=? WHERE id=?`, [isoNow, userRow.id]).catch(
-      () => {},
+      () => { },
     );
 
     res.cookie(COOKIE_NAME, sessionToken, {
@@ -3017,10 +3046,10 @@ app.post(
         await dbRun("DELETE FROM sessions WHERE user_id=? AND id<>?", [
           req.user.id,
           req.sessionId,
-        ]).catch(() => {});
+        ]).catch(() => { });
       } else {
         await dbRun("DELETE FROM sessions WHERE user_id=?", [req.user.id]).catch(
-          () => {},
+          () => { },
         );
       }
 
@@ -3328,7 +3357,7 @@ app.patch("/api/users/:id", requireAdmin, async (req, res) => {
 
     if (shouldClearSessions) {
       await dbRun("DELETE FROM sessions WHERE user_id=?", [targetId]).catch(
-        () => {},
+        () => { },
       );
     }
 
@@ -3412,7 +3441,7 @@ app.delete("/api/users/:id", requireAdmin, async (req, res) => {
       transactionActive = false;
     } catch (err) {
       if (transactionActive) {
-        await dbRun("ROLLBACK").catch(() => {});
+        await dbRun("ROLLBACK").catch(() => { });
       }
       throw err;
     }
@@ -3854,8 +3883,8 @@ app.post("/api/settings/global-variables", requireAdmin, async (req, res) => {
       rawValue === null || rawValue === undefined
         ? ""
         : typeof rawValue === "string"
-        ? rawValue
-        : String(rawValue);
+          ? rawValue
+          : String(rawValue);
     const storedValue = isSecure ? encryptVariableValue(stringValue) : stringValue;
     const now = new Date().toISOString();
     const id = uuidv4();
@@ -3925,8 +3954,8 @@ app.put(
           rawValue === null || rawValue === undefined
             ? ""
             : typeof rawValue === "string"
-            ? rawValue
-            : String(rawValue);
+              ? rawValue
+              : String(rawValue);
         storedValue = nextIsSecure
           ? encryptVariableValue(stringValue)
           : stringValue;
@@ -4245,7 +4274,7 @@ app.get("/api/data/backup", requireAdmin, async (req, res) => {
     console.error("Backup failed", err);
     res.status(500).json({ error: "Failed to create backup" });
   } finally {
-    fsp.unlink(tempPath).catch(() => {});
+    fsp.unlink(tempPath).catch(() => { });
   }
 });
 
@@ -4297,7 +4326,7 @@ app.post("/api/data/restore", requireAdmin, async (req, res) => {
     console.error("Restore failed", err);
     res.status(500).json({ error: "Failed to restore database" });
   } finally {
-    fsp.unlink(tempPath).catch(() => {});
+    fsp.unlink(tempPath).catch(() => { });
   }
 });
 
@@ -4371,8 +4400,8 @@ function registerScriptRoute(script) {
         typeof attemptedMethod === "string" && attemptedMethod.trim()
           ? attemptedMethod.trim().toUpperCase()
           : typeof req.method === "string" && req.method.trim()
-          ? req.method.trim().toUpperCase()
-          : "";
+            ? req.method.trim().toUpperCase()
+            : "";
 
       let triggeredByLabel = "API";
       let triggeredByUserId = null;
@@ -4428,8 +4457,7 @@ function registerScriptRoute(script) {
       });
     } catch (err) {
       console.error(
-        `Failed to log unsupported method attempt for script ${
-          script?.id || "unknown"
+        `Failed to log unsupported method attempt for script ${script?.id || "unknown"
         }`,
         err,
       );
@@ -5154,12 +5182,12 @@ function mapCollectionRowForApi(row, user, permissionRow = null) {
   const defaultRunnerHostId = row.default_runner_host_id || null;
   const defaultRunner = defaultRunnerHostId
     ? {
-        id: defaultRunnerHostId,
-        name: row.default_runner_name || defaultRunnerHostId,
-        status: row.default_runner_status || RUNNER_STATUS.PENDING,
-        statusMessage: row.default_runner_status_message || null,
-        adminOnly: normalizeDbBoolean(row.default_runner_admin_only),
-      }
+      id: defaultRunnerHostId,
+      name: row.default_runner_name || defaultRunnerHostId,
+      status: row.default_runner_status || RUNNER_STATUS.PENDING,
+      statusMessage: row.default_runner_status_message || null,
+      adminOnly: normalizeDbBoolean(row.default_runner_admin_only),
+    }
     : null;
   return {
     id: row.id,
@@ -5381,8 +5409,8 @@ async function handleCreateCollectionVariable(req, res) {
       rawValue === null || rawValue === undefined
         ? ""
         : typeof rawValue === "string"
-        ? rawValue
-        : String(rawValue);
+          ? rawValue
+          : String(rawValue);
     const storedValue = isSecure ? encryptVariableValue(stringValue) : stringValue;
     const now = new Date().toISOString();
     const id = uuidv4();
@@ -5470,8 +5498,8 @@ async function handleUpdateCollectionVariable(req, res) {
         rawValue === null || rawValue === undefined
           ? ""
           : typeof rawValue === "string"
-          ? rawValue
-          : String(rawValue);
+            ? rawValue
+            : String(rawValue);
       storedValue = nextIsSecure
         ? encryptVariableValue(stringValue)
         : stringValue;
@@ -6001,8 +6029,8 @@ app.post("/api/scripts/draft", async (req, res) => {
       typeof body.categoryId === "string" && body.categoryId.trim()
         ? body.categoryId.trim()
         : typeof body.collectionId === "string" && body.collectionId.trim()
-        ? body.collectionId.trim()
-        : null;
+          ? body.collectionId.trim()
+          : null;
 
     let categoryRecord = null;
     if (preferredCategoryId) {
@@ -6251,22 +6279,22 @@ app.post("/api/scripts", async (req, res) => {
     typeof inputCategoryId === "string" && inputCategoryId.trim()
       ? inputCategoryId.trim()
       : typeof inputCollectionId === "string" && inputCollectionId.trim()
-      ? inputCollectionId.trim()
-      : "";
+        ? inputCollectionId.trim()
+        : "";
 
   const inheritPermissionsOverride =
     typeof inputInheritCategoryPermissions === "boolean"
       ? inputInheritCategoryPermissions
       : typeof inputInheritCollectionPermissions === "boolean"
-      ? inputInheritCollectionPermissions
-      : null;
+        ? inputInheritCollectionPermissions
+        : null;
 
   const inheritRunnerOverride =
     typeof inputInheritCategoryRunner === "boolean"
       ? inputInheritCategoryRunner
       : typeof inputInheritCollectionRunner === "boolean"
-      ? inputInheritCollectionRunner
-      : null;
+        ? inputInheritCollectionRunner
+        : null;
 
   try {
     if (!name) {
@@ -6358,8 +6386,8 @@ app.post("/api/scripts", async (req, res) => {
           inheritRunnerOverride !== null
             ? inheritRunnerOverride
             : inputInheritCategoryRunner !== undefined
-            ? inputInheritCategoryRunner
-            : inputInheritCollectionRunner;
+              ? inputInheritCategoryRunner
+              : inputInheritCollectionRunner;
         inheritCategoryRunner = Boolean(runnerValue);
       }
 
@@ -6480,11 +6508,11 @@ app.post("/api/scripts", async (req, res) => {
       );
       const acceptedMethodsToPersist = bodyHasAcceptedMethods
         ? normalizeAcceptedMethods(inputAcceptedMethods, {
-            ensure: [effectiveRunMethod],
-          })
+          ensure: [effectiveRunMethod],
+        })
         : normalizeAcceptedMethods(existingAcceptedMethods, {
-            ensure: [effectiveRunMethod],
-          });
+          ensure: [effectiveRunMethod],
+        });
       const serializedAcceptedMethods = JSON.stringify(acceptedMethodsToPersist);
 
       const includeAutomnResponse = bodyHasIncludeAutomnResponseData
@@ -6638,12 +6666,12 @@ app.post("/api/scripts", async (req, res) => {
 
     let inheritCategoryRunner = bodyHasInheritCategoryRunner
       ? Boolean(
-          inheritRunnerOverride !== null
-            ? inheritRunnerOverride
-            : inputInheritCategoryRunner !== undefined
+        inheritRunnerOverride !== null
+          ? inheritRunnerOverride
+          : inputInheritCategoryRunner !== undefined
             ? inputInheritCategoryRunner
             : inputInheritCollectionRunner,
-        )
+      )
       : true;
     let runnerHostIdToPersist = null;
     let runnerHostRecord = null;
@@ -6922,8 +6950,8 @@ app.post("/api/scripts/:id/variables", async (req, res) => {
       rawValue === null || rawValue === undefined
         ? ""
         : typeof rawValue === "string"
-        ? rawValue
-        : String(rawValue);
+          ? rawValue
+          : String(rawValue);
     const storedValue = isSecure ? encryptVariableValue(stringValue) : stringValue;
     const now = new Date().toISOString();
     const id = uuidv4();
@@ -7012,8 +7040,8 @@ app.put("/api/scripts/:id/variables/:variableId", async (req, res) => {
         rawValue === null || rawValue === undefined
           ? ""
           : typeof rawValue === "string"
-          ? rawValue
-          : String(rawValue);
+            ? rawValue
+            : String(rawValue);
       storedValue = nextIsSecure
         ? encryptVariableValue(stringValue)
         : stringValue;
@@ -7491,41 +7519,41 @@ app.get("/api/notifications", async (req, res) => {
 
     const notifications = Array.isArray(rows)
       ? rows.map((row) => {
-          const typeValue = typeof row?.type === "string"
-            ? row.type.toLowerCase()
-            : "";
-          const type = KNOWN_NOTIFICATION_TYPES.has(typeValue)
-            ? typeValue
-            : NOTIFICATION_TYPE_VALUES.SCRIPT;
-          const metadata = parseNotificationMetadata(row?.metadata);
-          const audience = {
-            type: metadata?.audienceType || null,
-            value: metadata?.audienceValue || null,
-            usernames: Array.isArray(metadata?.targetUsernames)
-              ? metadata.targetUsernames
-              : [],
-          };
+        const typeValue = typeof row?.type === "string"
+          ? row.type.toLowerCase()
+          : "";
+        const type = KNOWN_NOTIFICATION_TYPES.has(typeValue)
+          ? typeValue
+          : NOTIFICATION_TYPE_VALUES.SCRIPT;
+        const metadata = parseNotificationMetadata(row?.metadata);
+        const audience = {
+          type: metadata?.audienceType || null,
+          value: metadata?.audienceValue || null,
+          usernames: Array.isArray(metadata?.targetUsernames)
+            ? metadata.targetUsernames
+            : [],
+        };
 
-          return {
-            id: row.id,
-            type,
-            level: normalizeNotificationLevel(row?.level),
-            message: row?.message || "",
-            createdAt: row?.created_at || null,
-            isRead: Boolean(row?.read_at),
-            readAt: row?.read_at || null,
-            script: row?.script_id
-              ? {
-                  id: row.script_id,
-                  name: row.script_name || null,
-                  endpoint: row.script_endpoint || null,
-                }
-              : null,
-            audience,
-            metadata,
-            isPinned: Boolean(metadata?.pinUntilRead),
-          };
-        })
+        return {
+          id: row.id,
+          type,
+          level: normalizeNotificationLevel(row?.level),
+          message: row?.message || "",
+          createdAt: row?.created_at || null,
+          isRead: Boolean(row?.read_at),
+          readAt: row?.read_at || null,
+          script: row?.script_id
+            ? {
+              id: row.script_id,
+              name: row.script_name || null,
+              endpoint: row.script_endpoint || null,
+            }
+            : null,
+          audience,
+          metadata,
+          isPinned: Boolean(metadata?.pinUntilRead),
+        };
+      })
       : [];
 
     const summary = await loadNotificationSummary(req.user.id);
@@ -7728,16 +7756,16 @@ app.get("/api/scripts/:id/permissions", async (req, res) => {
         .map((user) => ({
           id: user.id,
           username: user.username,
-        isAdmin: normalizeDbBoolean(user.is_admin),
-      })),
+          isAdmin: normalizeDbBoolean(user.is_admin),
+        })),
       category: categoryRow
         ? {
-            id: categoryRow.id,
-            name: categoryRow.name,
-            description: categoryRow.description || "",
-            defaultLanguage: categoryRow.default_language || null,
-            isSystem: normalizeDbBoolean(categoryRow.is_system),
-          }
+          id: categoryRow.id,
+          name: categoryRow.name,
+          description: categoryRow.description || "",
+          defaultLanguage: categoryRow.default_language || null,
+          isSystem: normalizeDbBoolean(categoryRow.is_system),
+        }
         : null,
     });
   } catch (err) {

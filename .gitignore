@@ -3,3 +3,5 @@ runner-state/
 runner-scripts/
 runner-workdir/
 node_modules/
+data/
+

@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@monaco-editor/react": "^4.7.0",
+    "automn": "file:..",
     "react": "^19.1.1",
     "react-dom": "^19.1.1"
   },

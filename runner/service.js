@@ -13,6 +13,7 @@ const {
   NOTIFY_MARKER,
   resolvePythonCommand,
   resolvePowerShellLauncher,
+  resolveShellExecutable,
   resetPythonCommandCache,
   rehydratePackageCache,
   clearPackageCache,
@@ -40,12 +41,18 @@ const runtimeExecutableEnv = {
     process.env.AUTOMN_POWERSHELL_PATH ||
     ""
   ),
+  shell: normalizeExecutableValue(
+    process.env.AUTOMN_RUNNER_SHELL_PATH ||
+    process.env.AUTOMN_SHELL_PATH ||
+    ""
+  ),
 };
 
 const runtimeVersionCache = {
   node: (process.version || "").replace(/^v/, "") || null,
   python: null,
   pwsh: null,
+  shell: null,
 };
 
 const RUNTIME_VERSION_PATTERN = /\b\d+(?:\.\d+){0,3}\b/;
@@ -53,7 +60,7 @@ const RUNTIME_VERSION_PATTERN = /\b\d+(?:\.\d+){0,3}\b/;
 const isPowerShellVersionOutput = (line) =>
   /\b(powershell|psversion)\b/i.test(line) || /^[0-9]+(?:\.[0-9]+){0,3}$/.test(line);
 
-const EXECUTABLE_KEYS = ["node", "python", "powershell"];
+const EXECUTABLE_KEYS = ["node", "python", "powershell", "shell"];
 
 function normalizeExecutableValue(value) {
   if (!value || typeof value !== "string") {
@@ -356,6 +363,7 @@ const config = {
     node: runtimeExecutableEnv.node,
     python: runtimeExecutableEnv.python,
     powershell: runtimeExecutableEnv.powershell,
+    shell: runtimeExecutableEnv.shell,
   },
 };
 
@@ -571,6 +579,7 @@ function setRuntimeExecutables(updates = {}) {
 function refreshRuntimeDetections() {
   runtimeVersionCache.python = null;
   runtimeVersionCache.pwsh = null;
+  runtimeVersionCache.shell = null;
 
   resetPythonCommandCache();
   const executables = getRuntimeExecutables();
@@ -608,6 +617,11 @@ function refreshRuntimeDetections() {
     detectRuntimeVersion(candidate, ["--version"], "pwsh", {
       validateOutput: isPowerShellVersionOutput,
     });
+  }
+
+  const shellExecutable = resolveShellExecutable(executables.shell);
+  if (shellExecutable) {
+    detectRuntimeVersion(shellExecutable, ["--version"], "shell");
   }
 }
 

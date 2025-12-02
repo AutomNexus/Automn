@@ -59,6 +59,7 @@ When these directories are not provided explicitly, the runner stores runtime da
 | `AUTOMN_RUNNER_LOCAL_MAX_CONCURRENCY` | Local safeguard limiting simultaneous executions regardless of host configuration. |
 | `AUTOMN_RUNNER_TIMEOUT_MS` | Upper bound (ms) for host → runner HTTP requests. |
 | `AUTOMN_RUNNER_RESET_TOKEN` | Enables the `/internal/reset` endpoint for secret rotation. Provide a long random string. |
+| `AUTOMN_RUNNER_SHELL_PATH` | Custom shell executable for `shell` language scripts (defaults to `bash`/`sh`). |
 | `PORT` / `AUTOMN_RUNNER_PORT` | HTTP listen port (default `3030`). |
 | `PYTHON_VERSION`, `POWERSHELL_VERSION` (build args) | Pin interpreter versions when building the runner Docker image. |
 

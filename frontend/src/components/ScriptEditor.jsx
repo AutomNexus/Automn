@@ -83,13 +83,40 @@ const POWERSHELL_SNIPPETS = [
   },
 ];
 
+const SHELL_SNIPPETS = [
+  {
+    label: "AutomnReturn (success)",
+    value: "AutomnReturn '{\"success\":true,\"data\":null}'\n",
+  },
+  {
+    label: "AutomnLog (info)",
+    value: "AutomnLog \"Starting process\" \"info\"\n",
+  },
+  {
+    label: "AutomnLog (warn)",
+    value: "AutomnLog \"User not found\" \"warn\"\n",
+  },
+  {
+    label: "AutomnLog (error)",
+    value: "AutomnLog \"Critical failure\" \"error\"\n",
+  },
+  {
+    label: "AutomnRunLog",
+    value: "AutomnRunLog \"Debug info\"\n",
+  },
+  {
+    label: "AutomnNotify (Admins)",
+    value: "AutomnNotify \"Admins\" \"Deployment completed\" \"info\"\n",
+  },
+];
+
 const SNIPPETS = {
   node: NODE_SNIPPETS,
   javascript: NODE_SNIPPETS,
   typescript: NODE_SNIPPETS,
   python: PYTHON_SNIPPETS,
   powershell: POWERSHELL_SNIPPETS,
-  shell: [],
+  shell: SHELL_SNIPPETS,
 };
 
 const VARIABLE_WARNING_STORAGE_KEY = "automn.hideVariableSecurityWarning";
@@ -910,6 +937,7 @@ export default function ScriptEditor({
             <option value="node">Node JS</option>
             <option value="python">Python</option>
             <option value="powershell">PowerShell</option>
+            <option value="shell">Shell</option>
           </select>
         </div>
 

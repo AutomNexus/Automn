@@ -10,6 +10,8 @@ const mapLanguageToMonaco = (language) => {
       return "python";
     case "powershell":
       return "powershell";
+    case "shell":
+      return "shell";
     default:
       return "javascript";
   }

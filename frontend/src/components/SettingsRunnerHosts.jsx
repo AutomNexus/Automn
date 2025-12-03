@@ -49,7 +49,7 @@ const RUNTIME_ICON_RULES = [
   },
   {
     test: (value) => value.includes("shell"),
-    icon: createEmojiIcon("💻"),
+    icon: createImageIcon("/shell.png", "Shell"),
   },
 ];
 

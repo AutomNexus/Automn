@@ -30,7 +30,7 @@ const LANGUAGE_ICONS = {
   typescript: createImageIcon("/nodejs.svg", "TypeScript"),
   python: createImageIcon("/python.svg", "Python"),
   powershell: createImageIcon("/powershell.svg", "PowerShell"),
-  shell: createEmojiIcon("💻"),
+  shell: createImageIcon("/shell.png", "Shell"),,
 };
 
 const DEFAULT_SCRIPT_ICON = createEmojiIcon("📄");

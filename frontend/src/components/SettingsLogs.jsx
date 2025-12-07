@@ -27,10 +27,16 @@ function formatDateTime(value) {
 
 function getStatusTone(status) {
   const normalized = (status || "").toLowerCase();
-  if (normalized === "success") return "text-emerald-300 bg-emerald-500/10 border-emerald-500/40";
-  if (normalized === "error") return "text-rose-300 bg-rose-500/10 border-rose-500/40";
-  if (normalized === "running" || normalized === "pending") return "text-amber-200 bg-amber-500/10 border-amber-500/40";
-  return "text-slate-300 bg-slate-600/20 border-slate-500/40";
+  if (normalized === "success") {
+    return "text-emerald-700 bg-emerald-50 border-emerald-200 dark:text-emerald-300 dark:bg-emerald-500/10 dark:border-emerald-500/40";
+  }
+  if (normalized === "error") {
+    return "text-rose-700 bg-rose-50 border-rose-200 dark:text-rose-300 dark:bg-rose-500/10 dark:border-rose-500/40";
+  }
+  if (normalized === "running" || normalized === "pending") {
+    return "text-amber-700 bg-amber-50 border-amber-200 dark:text-amber-200 dark:bg-amber-500/10 dark:border-amber-500/40";
+  }
+  return "text-slate-700 bg-slate-100 border-slate-200 dark:text-slate-300 dark:bg-slate-600/20 dark:border-slate-500/40";
 }
 
 function getMethodBadgeTone(method) {
@@ -57,8 +63,8 @@ function getMethodBadgeTone(method) {
 function TagBadge({ children }) {
   if (!children) return <span className="text-slate-400">None</span>;
   return (
-    <span className="inline-flex items-center gap-1 rounded-full border border-slate-600 bg-slate-700/60 px-2 py-1 text-[11px] font-medium uppercase tracking-wide text-slate-100">
-      <span className="h-2 w-2 rounded-full bg-slate-300" />
+    <span className="inline-flex items-center gap-1 rounded-full border border-slate-300 bg-slate-100 px-2 py-1 text-[11px] font-medium uppercase tracking-wide text-slate-700 dark:border-slate-600 dark:bg-slate-700/60 dark:text-slate-100">
+      <span className="h-2 w-2 rounded-full bg-slate-500 dark:bg-slate-300" />
       {children}
     </span>
   );
@@ -78,7 +84,7 @@ function RequestBadge({ method, fallback }) {
   if (!method && !fallback) return <span className="text-slate-400">Unknown</span>;
   if (!method) {
     return (
-      <span className="inline-flex items-center rounded-full border border-slate-500 bg-slate-600/40 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-slate-100">
+      <span className="inline-flex items-center rounded-full border border-slate-300 bg-slate-100 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-slate-700 dark:border-slate-500 dark:bg-slate-600/40 dark:text-slate-100">
         {fallback}
       </span>
     );
@@ -211,18 +217,18 @@ export default function SettingsLogs({ onAuthError }) {
   return (
     <div className="flex h-full flex-col gap-4">
       <div className="space-y-2">
-        <h3 className="text-lg font-semibold text-slate-100">Consolidated Logs</h3>
-        <p className="text-sm text-slate-400">
+        <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Consolidated Logs</h3>
+        <p className="text-sm text-slate-600 dark:text-slate-400">
           Review recent activity across the scripts you can access. Filter by collection, script, HTTP
           method, result, or error tag, and search within log summaries.
         </p>
       </div>
 
-      <div className="grid grid-cols-1 gap-3 rounded border border-slate-800 bg-slate-900/60 p-3 md:grid-cols-3 lg:grid-cols-6">
-        <label className="space-y-1 text-sm text-slate-300">
-          <span className="text-xs uppercase tracking-wide text-slate-400">Collection</span>
+      <div className="grid grid-cols-1 gap-3 rounded border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-800 dark:bg-slate-900/60 md:grid-cols-3 lg:grid-cols-6">
+        <label className="space-y-1 text-sm text-slate-700 dark:text-slate-300">
+          <span className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Collection</span>
           <select
-            className="w-full rounded border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 focus:border-sky-500 focus:outline-none"
+            className="w-full rounded border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-sky-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
             value={filters.collectionId}
             onChange={(event) => handleFilterChange("collectionId", event.target.value)}
           >
@@ -234,10 +240,10 @@ export default function SettingsLogs({ onAuthError }) {
           </select>
         </label>
 
-        <label className="space-y-1 text-sm text-slate-300">
-          <span className="text-xs uppercase tracking-wide text-slate-400">Script</span>
+        <label className="space-y-1 text-sm text-slate-700 dark:text-slate-300">
+          <span className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Script</span>
           <select
-            className="w-full rounded border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 focus:border-sky-500 focus:outline-none"
+            className="w-full rounded border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-sky-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
             value={filters.scriptId}
             onChange={(event) => handleFilterChange("scriptId", event.target.value)}
           >
@@ -249,10 +255,10 @@ export default function SettingsLogs({ onAuthError }) {
           </select>
         </label>
 
-        <label className="space-y-1 text-sm text-slate-300">
-          <span className="text-xs uppercase tracking-wide text-slate-400">Result</span>
+        <label className="space-y-1 text-sm text-slate-700 dark:text-slate-300">
+          <span className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Result</span>
           <select
-            className="w-full rounded border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 focus:border-sky-500 focus:outline-none"
+            className="w-full rounded border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-sky-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
             value={filters.result}
             onChange={(event) => handleFilterChange("result", event.target.value)}
           >
@@ -264,10 +270,10 @@ export default function SettingsLogs({ onAuthError }) {
           </select>
         </label>
 
-        <label className="space-y-1 text-sm text-slate-300">
-          <span className="text-xs uppercase tracking-wide text-slate-400">HTTP Type</span>
+        <label className="space-y-1 text-sm text-slate-700 dark:text-slate-300">
+          <span className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">HTTP Type</span>
           <select
-            className="w-full rounded border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 focus:border-sky-500 focus:outline-none"
+            className="w-full rounded border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-sky-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
             value={filters.httpType}
             onChange={(event) => handleFilterChange("httpType", event.target.value)}
           >
@@ -279,10 +285,10 @@ export default function SettingsLogs({ onAuthError }) {
           </select>
         </label>
 
-        <label className="space-y-1 text-sm text-slate-300">
-          <span className="text-xs uppercase tracking-wide text-slate-400">Error Tag</span>
+        <label className="space-y-1 text-sm text-slate-700 dark:text-slate-300">
+          <span className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Error Tag</span>
           <select
-            className="w-full rounded border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 focus:border-sky-500 focus:outline-none"
+            className="w-full rounded border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-sky-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
             value={filters.errorTag}
             onChange={(event) => handleFilterChange("errorTag", event.target.value)}
           >
@@ -294,28 +300,28 @@ export default function SettingsLogs({ onAuthError }) {
           </select>
         </label>
 
-        <label className="space-y-1 text-sm text-slate-300">
-          <span className="text-xs uppercase tracking-wide text-slate-400">Search</span>
+        <label className="space-y-1 text-sm text-slate-700 dark:text-slate-300">
+          <span className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Search</span>
           <input
             type="search"
             placeholder="Search logs, scripts, tags"
-            className="w-full rounded border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 focus:border-sky-500 focus:outline-none"
+            className="w-full rounded border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-sky-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
             value={filters.search}
             onChange={(event) => handleFilterChange("search", event.target.value)}
           />
         </label>
       </div>
 
-      <div className="flex-1 rounded border border-slate-800 bg-slate-900/70">
-        <div className="flex items-center justify-between border-b border-slate-800 px-4 py-3">
+      <div className="flex-1 rounded border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900/70">
+        <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3 dark:border-slate-800">
           <div>
-            <h4 className="text-sm font-semibold uppercase tracking-wide text-slate-300">Log Events</h4>
-            <p className="text-xs text-slate-500">
+            <h4 className="text-sm font-semibold uppercase tracking-wide text-slate-700 dark:text-slate-300">Log Events</h4>
+            <p className="text-xs text-slate-500 dark:text-slate-500">
               Showing {events.length} entr{events.length === 1 ? "y" : "ies"} matching your filters.
             </p>
           </div>
           <button
-            className="rounded border border-slate-700 bg-slate-800 px-3 py-2 text-sm font-semibold text-slate-100 hover:border-sky-500 hover:text-sky-200"
+            className="rounded border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-900 hover:border-sky-500 hover:text-sky-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:text-sky-200"
             type="button"
             onClick={loadEvents}
             disabled={isLoading}
@@ -325,24 +331,24 @@ export default function SettingsLogs({ onAuthError }) {
         </div>
 
         {error && (
-          <div className="border-b border-rose-800/50 bg-rose-900/30 px-4 py-3 text-sm text-rose-200">
+          <div className="border-b border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800 dark:border-rose-800/50 dark:bg-rose-900/30 dark:text-rose-200">
             {error}
           </div>
         )}
 
         <div className="overflow-auto">
-          <div className="grid min-w-[700px] grid-cols-12 border-b border-slate-800/80 bg-slate-800/60 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-300">
-            <div className="col-span-3">Datetime</div>
-            <div className="col-span-3">Script</div>
-            <div className="col-span-2">Request Type</div>
-            <div className="col-span-2">Result</div>
-            <div className="col-span-2">Error Tag</div>
+          <div className="grid min-w-[760px] grid-cols-[1.6fr_1.4fr_1fr_1fr_1fr] border-b border-slate-200 bg-slate-100 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-600 dark:border-slate-800/80 dark:bg-slate-800/60 dark:text-slate-300">
+            <div>Datetime</div>
+            <div>Script</div>
+            <div>Request Type</div>
+            <div>Result</div>
+            <div>Error Tag</div>
           </div>
 
           {isLoading ? (
-            <div className="px-4 py-6 text-center text-sm text-slate-400">Loading logs...</div>
+            <div className="px-4 py-6 text-center text-sm text-slate-500 dark:text-slate-400">Loading logs...</div>
           ) : events.length === 0 ? (
-            <div className="px-4 py-6 text-center text-sm text-slate-400">
+            <div className="px-4 py-6 text-center text-sm text-slate-500 dark:text-slate-400">
               No log events match your filters yet.
             </div>
           ) : (
@@ -351,27 +357,27 @@ export default function SettingsLogs({ onAuthError }) {
                 key={event.runId}
                 type="button"
                 onClick={() => setSelectedEvent(event)}
-                className="grid min-w-[700px] grid-cols-12 items-center border-b border-slate-800/60 px-4 py-3 text-left text-sm hover:bg-slate-800/40 focus:outline-none focus:ring-2 focus:ring-sky-500/60"
+                className="grid min-w-[760px] grid-cols-[1.6fr_1.4fr_1fr_1fr_1fr] items-center border-b border-slate-200 px-4 py-3 text-left text-sm text-slate-900 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-sky-500/60 dark:border-slate-800/60 dark:text-slate-100 dark:hover:bg-slate-800/40"
               >
-                <div className="col-span-3 space-y-1 text-slate-200">
+                <div className="space-y-1 text-slate-900 dark:text-slate-200">
                   <div className="font-medium">{formatDateTime(event.timestamp)}</div>
                   {event.message ? (
-                    <div className="line-clamp-1 text-xs text-slate-400" title={event.message}>
+                    <div className="line-clamp-1 text-xs text-slate-500 dark:text-slate-400" title={event.message}>
                       {event.message}
                     </div>
                   ) : null}
                 </div>
-                <div className="col-span-3 space-y-1">
-                  <div className="font-semibold text-slate-100">{event.scriptName}</div>
-                  <div className="text-xs text-slate-400">{event.collectionName}</div>
+                <div className="space-y-1">
+                  <div className="font-semibold text-slate-900 dark:text-slate-100">{event.scriptName}</div>
+                  <div className="text-xs text-slate-500 dark:text-slate-400">{event.collectionName}</div>
                 </div>
-                <div className="col-span-2">
+                <div>
                   <RequestBadge method={event.httpType} fallback={event.requestType} />
                 </div>
-                <div className="col-span-2">
+                <div>
                   <StatusBadge status={event.result} />
                 </div>
-                <div className="col-span-2">
+                <div>
                   <TagBadge>{event.errorTag}</TagBadge>
                 </div>
               </button>
@@ -381,17 +387,17 @@ export default function SettingsLogs({ onAuthError }) {
       </div>
 
       {selectedEvent ? (
-        <div className="rounded border border-slate-800 bg-slate-900/80 p-4 shadow-xl">
+        <div className="rounded border border-slate-200 bg-white p-4 shadow-xl dark:border-slate-800 dark:bg-slate-900/80">
           <div className="mb-3 flex items-start justify-between gap-3">
             <div>
-              <p className="text-xs uppercase tracking-wide text-slate-400">Log Details</p>
-              <h5 className="text-lg font-semibold text-slate-100">{selectedEvent.scriptName}</h5>
-              <p className="text-sm text-slate-400">{selectedEvent.collectionName}</p>
+              <p className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Log Details</p>
+              <h5 className="text-lg font-semibold text-slate-900 dark:text-slate-100">{selectedEvent.scriptName}</h5>
+              <p className="text-sm text-slate-600 dark:text-slate-400">{selectedEvent.collectionName}</p>
             </div>
             <button
               type="button"
               onClick={() => setSelectedEvent(null)}
-              className="rounded border border-slate-700 bg-slate-800 px-3 py-1 text-sm font-semibold text-slate-100 hover:border-sky-500 hover:text-sky-200"
+              className="rounded border border-slate-300 bg-white px-3 py-1 text-sm font-semibold text-slate-900 hover:border-sky-500 hover:text-sky-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:text-sky-200"
             >
               Close
             </button>
@@ -406,9 +412,9 @@ export default function SettingsLogs({ onAuthError }) {
                 <div className="space-y-1">
                   <RequestBadge method={selectedEvent.httpType} fallback={selectedEvent.requestOrigin} />
                   {selectedEvent.triggeredByUserName ? (
-                    <p className="text-xs text-slate-400">Triggered by {selectedEvent.triggeredByUserName}</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">Triggered by {selectedEvent.triggeredByUserName}</p>
                   ) : selectedEvent.triggeredBy ? (
-                    <p className="text-xs text-slate-400">Triggered by {selectedEvent.triggeredBy}</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">Triggered by {selectedEvent.triggeredBy}</p>
                   ) : null}
                 </div>
               }
@@ -431,9 +437,9 @@ export default function SettingsLogs({ onAuthError }) {
           </dl>
 
           {selectedEvent.message ? (
-            <div className="mt-4 rounded border border-slate-800 bg-slate-950/40 p-3 text-sm text-slate-100">
-              <p className="text-xs uppercase tracking-wide text-slate-500">Message</p>
-              <p className="whitespace-pre-wrap text-slate-100">{selectedEvent.message}</p>
+            <div className="mt-4 rounded border border-slate-200 bg-slate-50 p-3 text-sm text-slate-900 dark:border-slate-800 dark:bg-slate-950/40 dark:text-slate-100">
+              <p className="text-xs uppercase tracking-wide text-slate-600 dark:text-slate-500">Message</p>
+              <p className="whitespace-pre-wrap text-slate-900 dark:text-slate-100">{selectedEvent.message}</p>
             </div>
           ) : null}
         </div>
@@ -444,9 +450,9 @@ export default function SettingsLogs({ onAuthError }) {
 
 function DetailRow({ label, value }) {
   return (
-    <div className="space-y-1 rounded border border-slate-800 bg-slate-950/40 p-3">
-      <p className="text-[11px] uppercase tracking-wide text-slate-500">{label}</p>
-      <div className="text-sm text-slate-100">{value || <span className="text-slate-400">Unknown</span>}</div>
+    <div className="space-y-1 rounded border border-slate-200 bg-slate-50 p-3 dark:border-slate-800 dark:bg-slate-950/40">
+      <p className="text-[11px] uppercase tracking-wide text-slate-600 dark:text-slate-500">{label}</p>
+      <div className="text-sm text-slate-900 dark:text-slate-100">{value || <span className="text-slate-400">Unknown</span>}</div>
     </div>
   );
 }

@@ -95,12 +95,14 @@ function RequestBadge({ method, fallback }) {
 export default function SettingsLogs({ onAuthError }) {
   const [events, setEvents] = useState([]);
   const [scripts, setScripts] = useState([]);
+  const [runnerHosts, setRunnerHosts] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
   const [selectedEvent, setSelectedEvent] = useState(null);
   const [filters, setFilters] = useState({
     collectionId: "",
     scriptId: "",
+    runnerHostId: "",
     result: "",
     httpType: "",
     errorTag: "",
@@ -120,6 +122,25 @@ export default function SettingsLogs({ onAuthError }) {
     }
   }, [onAuthError]);
 
+  const loadRunnerHosts = useCallback(async () => {
+    try {
+      const data = await apiRequest("/api/runners");
+      const normalized = Array.isArray(data?.runnerHosts)
+        ? data.runnerHosts.map((runner) => ({
+            id: runner.id,
+            name: runner.name || runner.id,
+          }))
+        : [];
+      setRunnerHosts(normalized);
+    } catch (err) {
+      if (onAuthError && (err.status === 401 || err.status === 403)) {
+        onAuthError(err);
+      } else {
+        console.error("Failed to load runner hosts", err);
+      }
+    }
+  }, [onAuthError]);
+
   const loadEvents = useCallback(async () => {
     setIsLoading(true);
     setError("");
@@ -127,6 +148,7 @@ export default function SettingsLogs({ onAuthError }) {
       const params = new URLSearchParams();
       if (filters.collectionId) params.set("collectionId", filters.collectionId);
       if (filters.scriptId) params.set("scriptId", filters.scriptId);
+      if (filters.runnerHostId) params.set("runnerHostId", filters.runnerHostId);
       if (filters.result) params.set("result", filters.result);
       if (filters.httpType) params.set("httpType", filters.httpType);
       if (filters.errorTag) params.set("errorTag", filters.errorTag);
@@ -151,7 +173,8 @@ export default function SettingsLogs({ onAuthError }) {
 
   useEffect(() => {
     loadScripts();
-  }, [loadScripts]);
+    loadRunnerHosts();
+  }, [loadScripts, loadRunnerHosts]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -205,6 +228,29 @@ export default function SettingsLogs({ onAuthError }) {
     return options;
   }, [events]);
 
+  const runnerHostOptions = useMemo(() => {
+    const entries = new Map();
+    entries.set("", "All runners");
+
+    runnerHosts.forEach((runner) => {
+      entries.set(runner.id, runner.name || runner.id);
+    });
+
+    events.forEach((event) => {
+      if (event.runnerHostId && !entries.has(event.runnerHostId)) {
+        entries.set(event.runnerHostId, event.runnerName || event.runnerHostId);
+      }
+    });
+
+    const options = [{ value: "", label: "All runners" }];
+    const namedOptions = Array.from(entries.entries())
+      .filter(([value]) => value)
+      .map(([value, label]) => ({ value, label }))
+      .sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: "base" }));
+
+    return options.concat(namedOptions);
+  }, [runnerHosts, events]);
+
   const handleFilterChange = (key, value) => {
     setFilters((prev) => {
       if (key === "collectionId") {
@@ -219,13 +265,13 @@ export default function SettingsLogs({ onAuthError }) {
       <div className="space-y-2">
         <h3 className="text-lg font-semibold text-slate-100">Consolidated Logs</h3>
         <p className="text-sm text-slate-400">
-          Review recent activity across the scripts you can access. Filter by collection, script, HTTP method, result,
-          or error tag, and search within log summaries.
+          Review recent activity across the scripts you can access. Filter by collection, script, runner, HTTP method,
+          result, or error tag, and search within log summaries.
         </p>
       </div>
 
       <div className="rounded border border-slate-800 bg-slate-900/40 p-4 shadow-sm">
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-3 lg:grid-cols-6">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-3 lg:grid-cols-7">
           <label className="space-y-1 text-sm text-slate-200">
             <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Collection</span>
             <select
@@ -234,6 +280,21 @@ export default function SettingsLogs({ onAuthError }) {
               onChange={(event) => handleFilterChange("collectionId", event.target.value)}
             >
               {collectionOptions.map((option) => (
+                <option key={option.value || "all"} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="space-y-1 text-sm text-slate-200">
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Runner</span>
+            <select
+              className="w-full rounded-lg border border-slate-800 bg-slate-950/60 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 transition focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+              value={filters.runnerHostId}
+              onChange={(event) => handleFilterChange("runnerHostId", event.target.value)}
+            >
+              {runnerHostOptions.map((option) => (
                 <option key={option.value || "all"} value={option.value}>
                   {option.label}
                 </option>
@@ -344,6 +405,7 @@ export default function SettingsLogs({ onAuthError }) {
               <tr>
                 <th className="px-4 py-2 text-left">Datetime</th>
                 <th className="px-4 py-2 text-left">Script</th>
+                <th className="px-4 py-2 text-left">Target Runner</th>
                 <th className="px-4 py-2 text-left">Request Type</th>
                 <th className="px-4 py-2 text-left">Result</th>
                 <th className="px-4 py-2 text-left">Error Tag</th>
@@ -352,14 +414,14 @@ export default function SettingsLogs({ onAuthError }) {
             <tbody className="divide-y divide-slate-800 bg-slate-900/30 text-slate-200">
               {isLoading && (
                 <tr>
-                  <td className="px-4 py-6 text-center text-sm text-slate-400" colSpan={5}>
+                  <td className="px-4 py-6 text-center text-sm text-slate-400" colSpan={6}>
                     Loading logs...
                   </td>
                 </tr>
               )}
               {!isLoading && events.length === 0 && (
                 <tr>
-                  <td className="px-4 py-6 text-center text-sm text-slate-400" colSpan={5}>
+                  <td className="px-4 py-6 text-center text-sm text-slate-400" colSpan={6}>
                     No log events match your filters yet.
                   </td>
                 </tr>
@@ -388,6 +450,16 @@ export default function SettingsLogs({ onAuthError }) {
                       </div>
                     </td>
                     <td className="px-4 py-3">
+                      <div className="space-y-1">
+                        <div className="font-semibold text-slate-100">
+                          {event.runnerName || event.runnerHostId || "Unassigned"}
+                        </div>
+                        {event.runnerHostId ? (
+                          <div className="text-xs text-slate-400">{event.runnerHostId}</div>
+                        ) : null}
+                      </div>
+                    </td>
+                    <td className="px-4 py-3">
                       <RequestBadge method={event.httpType} fallback={event.requestType} />
                     </td>
                     <td className="px-4 py-3">
@@ -404,17 +476,17 @@ export default function SettingsLogs({ onAuthError }) {
       </div>
 
       {selectedEvent ? (
-        <div className="rounded border border-slate-800 bg-slate-900/40 p-5 shadow-sm">
-          <div className="mb-4 flex items-start justify-between gap-3 border-b border-slate-800 pb-3">
+        <div className="rounded border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900/40">
+          <div className="mb-4 flex items-start justify-between gap-3 border-b border-slate-200 pb-3 dark:border-slate-800">
             <div className="space-y-1">
-              <p className="text-[11px] uppercase tracking-[0.08em] text-slate-400">Log Details</p>
-              <h5 className="text-xl font-semibold text-slate-50">{selectedEvent.scriptName}</h5>
-              <p className="text-sm text-slate-400">{selectedEvent.collectionName}</p>
+              <p className="text-[11px] uppercase tracking-[0.08em] text-slate-500 dark:text-slate-400">Log Details</p>
+              <h5 className="text-xl font-semibold text-slate-900 dark:text-slate-50">{selectedEvent.scriptName}</h5>
+              <p className="text-sm text-slate-600 dark:text-slate-400">{selectedEvent.collectionName}</p>
             </div>
             <button
               type="button"
               onClick={() => setSelectedEvent(null)}
-              className="rounded border border-slate-700 bg-slate-950/60 px-3 py-1.5 text-sm font-semibold text-slate-100 transition hover:border-sky-500 hover:text-sky-200"
+              className="rounded border border-slate-300 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700 transition hover:border-sky-500 hover:text-sky-700 dark:border-slate-700 dark:bg-slate-950/60 dark:text-slate-100 dark:hover:text-sky-200"
             >
               Close
             </button>
@@ -423,6 +495,21 @@ export default function SettingsLogs({ onAuthError }) {
           <dl className="grid grid-cols-1 gap-3 md:grid-cols-2">
             <DetailRow label="Timestamp" value={formatDateTime(selectedEvent.timestamp)} />
             <DetailRow label="Result" value={<StatusBadge status={selectedEvent.result} />} />
+            <DetailRow
+              label="Target Runner"
+              value={
+                selectedEvent.runnerHostId ? (
+                  <div className="space-y-0.5">
+                    <div className="font-semibold text-slate-900 dark:text-slate-100">
+                      {selectedEvent.runnerName || selectedEvent.runnerHostId}
+                    </div>
+                    <p className="text-xs text-slate-600 dark:text-slate-400">{selectedEvent.runnerHostId}</p>
+                  </div>
+                ) : (
+                  <span className="text-slate-500">Unassigned</span>
+                )
+              }
+            />
             <DetailRow
               label="Request Origin"
               value={
@@ -454,9 +541,9 @@ export default function SettingsLogs({ onAuthError }) {
           </dl>
 
           {selectedEvent.message ? (
-            <div className="mt-4 rounded border border-slate-800 bg-slate-950/40 p-4 text-sm text-slate-100">
-              <p className="text-[11px] uppercase tracking-[0.08em] text-slate-400">Message</p>
-              <p className="whitespace-pre-wrap text-slate-100">{selectedEvent.message}</p>
+            <div className="mt-4 rounded border border-slate-200 bg-slate-50 p-4 text-sm text-slate-800 shadow-sm dark:border-slate-800 dark:bg-slate-950/40 dark:text-slate-100">
+              <p className="text-[11px] uppercase tracking-[0.08em] text-slate-500 dark:text-slate-400">Message</p>
+              <p className="whitespace-pre-wrap text-slate-800 dark:text-slate-100">{selectedEvent.message}</p>
             </div>
           ) : null}
         </div>
@@ -467,9 +554,9 @@ export default function SettingsLogs({ onAuthError }) {
 
 function DetailRow({ label, value }) {
   return (
-    <div className="space-y-1 rounded border border-slate-800 bg-slate-950/40 p-3">
-      <p className="text-[11px] uppercase tracking-wide text-slate-500">{label}</p>
-      <div className="text-sm text-slate-100">{value || <span className="text-slate-500">Unknown</span>}</div>
+    <div className="space-y-1 rounded border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-800 dark:bg-slate-950/40">
+      <p className="text-[11px] uppercase tracking-wide text-slate-600 dark:text-slate-500">{label}</p>
+      <div className="text-sm text-slate-900 dark:text-slate-100">{value || <span className="text-slate-500">Unknown</span>}</div>
     </div>
   );
 }

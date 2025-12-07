@@ -215,7 +215,7 @@ export default function SettingsLogs({ onAuthError }) {
   };
 
   return (
-    <div className="flex h-full flex-col gap-5">
+    <div className="flex h-full flex-col gap-6">
       <div className="space-y-2">
         <h3 className="text-lg font-semibold text-slate-100">Consolidated Logs</h3>
         <p className="text-sm text-slate-400">
@@ -224,104 +224,106 @@ export default function SettingsLogs({ onAuthError }) {
         </p>
       </div>
 
-      <div className="grid grid-cols-1 gap-3 rounded-xl border border-slate-800/80 bg-slate-950/60 p-4 shadow-lg shadow-slate-950/50 md:grid-cols-3 lg:grid-cols-6">
-        <label className="space-y-1 text-sm text-slate-200">
-          <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Collection</span>
-          <select
-            className="w-full rounded-lg border border-slate-800 bg-slate-900/60 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 transition focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
-            value={filters.collectionId}
-            onChange={(event) => handleFilterChange("collectionId", event.target.value)}
-          >
-            {collectionOptions.map((option) => (
-              <option key={option.value || "all"} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </label>
+      <div className="rounded border border-slate-800 bg-slate-900/40 p-4 shadow-sm">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-3 lg:grid-cols-6">
+          <label className="space-y-1 text-sm text-slate-200">
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Collection</span>
+            <select
+              className="w-full rounded-lg border border-slate-800 bg-slate-950/60 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 transition focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+              value={filters.collectionId}
+              onChange={(event) => handleFilterChange("collectionId", event.target.value)}
+            >
+              {collectionOptions.map((option) => (
+                <option key={option.value || "all"} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
 
-        <label className="space-y-1 text-sm text-slate-200">
-          <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Script</span>
-          <select
-            className="w-full rounded-lg border border-slate-800 bg-slate-900/60 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 transition focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
-            value={filters.scriptId}
-            onChange={(event) => handleFilterChange("scriptId", event.target.value)}
-          >
-            {scriptOptions.map((option) => (
-              <option key={option.value || "all"} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </label>
+          <label className="space-y-1 text-sm text-slate-200">
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Script</span>
+            <select
+              className="w-full rounded-lg border border-slate-800 bg-slate-950/60 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 transition focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+              value={filters.scriptId}
+              onChange={(event) => handleFilterChange("scriptId", event.target.value)}
+            >
+              {scriptOptions.map((option) => (
+                <option key={option.value || "all"} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
 
-        <label className="space-y-1 text-sm text-slate-200">
-          <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Result</span>
-          <select
-            className="w-full rounded-lg border border-slate-800 bg-slate-900/60 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 transition focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
-            value={filters.result}
-            onChange={(event) => handleFilterChange("result", event.target.value)}
-          >
-            {RESULT_OPTIONS.map((option) => (
-              <option key={option.value || "all"} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </label>
+          <label className="space-y-1 text-sm text-slate-200">
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Result</span>
+            <select
+              className="w-full rounded-lg border border-slate-800 bg-slate-950/60 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 transition focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+              value={filters.result}
+              onChange={(event) => handleFilterChange("result", event.target.value)}
+            >
+              {RESULT_OPTIONS.map((option) => (
+                <option key={option.value || "all"} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
 
-        <label className="space-y-1 text-sm text-slate-200">
-          <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">HTTP Type</span>
-          <select
-            className="w-full rounded-lg border border-slate-800 bg-slate-900/60 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 transition focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
-            value={filters.httpType}
-            onChange={(event) => handleFilterChange("httpType", event.target.value)}
-          >
-            {HTTP_METHOD_OPTIONS.map((option) => (
-              <option key={option.value || "all"} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </label>
+          <label className="space-y-1 text-sm text-slate-200">
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">HTTP Type</span>
+            <select
+              className="w-full rounded-lg border border-slate-800 bg-slate-950/60 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 transition focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+              value={filters.httpType}
+              onChange={(event) => handleFilterChange("httpType", event.target.value)}
+            >
+              {HTTP_METHOD_OPTIONS.map((option) => (
+                <option key={option.value || "all"} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
 
-        <label className="space-y-1 text-sm text-slate-200">
-          <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Error Tag</span>
-          <select
-            className="w-full rounded-lg border border-slate-800 bg-slate-900/60 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 transition focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
-            value={filters.errorTag}
-            onChange={(event) => handleFilterChange("errorTag", event.target.value)}
-          >
-            {errorTagOptions.map((option) => (
-              <option key={option.value || "all"} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </label>
+          <label className="space-y-1 text-sm text-slate-200">
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Error Tag</span>
+            <select
+              className="w-full rounded-lg border border-slate-800 bg-slate-950/60 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 transition focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+              value={filters.errorTag}
+              onChange={(event) => handleFilterChange("errorTag", event.target.value)}
+            >
+              {errorTagOptions.map((option) => (
+                <option key={option.value || "all"} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
 
-        <label className="space-y-1 text-sm text-slate-200">
-          <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Search</span>
-          <input
-            type="search"
-            placeholder="Search logs, scripts, tags"
-            className="w-full rounded-lg border border-slate-800 bg-slate-900/60 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 transition focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
-            value={filters.search}
-            onChange={(event) => handleFilterChange("search", event.target.value)}
-          />
-        </label>
+          <label className="space-y-1 text-sm text-slate-200">
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Search</span>
+            <input
+              type="search"
+              placeholder="Search logs, scripts, tags"
+              className="w-full rounded-lg border border-slate-800 bg-slate-950/60 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 transition focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+              value={filters.search}
+              onChange={(event) => handleFilterChange("search", event.target.value)}
+            />
+          </label>
+        </div>
       </div>
 
-      <div className="flex-1 rounded-2xl border border-slate-800/80 bg-slate-950/70 shadow-xl shadow-slate-950/50">
-        <div className="flex items-center justify-between border-b border-slate-800/80 px-5 py-4">
-          <div>
+      <div className="flex-1 space-y-3 rounded border border-slate-800 bg-slate-900/40 p-4 shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 pb-3">
+          <div className="space-y-0.5">
             <h4 className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-400">Log Events</h4>
             <p className="text-sm text-slate-300">
               Showing {events.length} entr{events.length === 1 ? "y" : "ies"} matching your filters.
             </p>
           </div>
           <button
-            className="rounded-lg bg-gradient-to-r from-sky-500 to-indigo-500 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:shadow-lg hover:shadow-sky-500/30 disabled:cursor-not-allowed disabled:opacity-60"
+            className="rounded border border-slate-700 bg-slate-950/60 px-4 py-2 text-sm font-semibold text-slate-100 transition hover:border-sky-500 hover:text-sky-200 disabled:cursor-not-allowed disabled:opacity-60"
             type="button"
             onClick={loadEvents}
             disabled={isLoading}
@@ -331,65 +333,80 @@ export default function SettingsLogs({ onAuthError }) {
         </div>
 
         {error && (
-          <div className="border-b border-rose-800/50 bg-rose-950/40 px-4 py-3 text-sm text-rose-100">
+          <div className="rounded border border-rose-800/60 bg-rose-900/30 px-4 py-3 text-sm text-rose-100">
             {error}
           </div>
         )}
 
-        <div className="overflow-auto">
-          <div className="grid min-w-[760px] grid-cols-[1.6fr_1.4fr_1fr_1fr_1fr] border-b border-slate-800/80 bg-slate-900/80 px-5 py-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-300">
-            <div>Datetime</div>
-            <div>Script</div>
-            <div>Request Type</div>
-            <div>Result</div>
-            <div>Error Tag</div>
-          </div>
-
-          {isLoading ? (
-            <div className="px-5 py-6 text-center text-sm text-slate-400">Loading logs...</div>
-          ) : events.length === 0 ? (
-            <div className="px-5 py-6 text-center text-sm text-slate-400">
-              No log events match your filters yet.
-            </div>
-          ) : (
-            events.map((event) => (
-              <button
-                key={event.runId}
-                type="button"
-                onClick={() => setSelectedEvent(event)}
-                className="grid min-w-[760px] grid-cols-[1.6fr_1.4fr_1fr_1fr_1fr] items-center border-b border-slate-800/60 px-5 py-3 text-left text-sm text-slate-100 transition hover:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-sky-500/50"
-              >
-                <div className="space-y-1 text-slate-200">
-                  <div className="font-semibold">{formatDateTime(event.timestamp)}</div>
-                  {event.message ? (
-                    <div className="line-clamp-1 text-xs text-slate-400" title={event.message}>
-                      {event.message}
-                    </div>
-                  ) : null}
-                </div>
-                <div className="space-y-1">
-                  <div className="font-semibold text-slate-100">{event.scriptName}</div>
-                  <div className="text-xs text-slate-400">{event.collectionName}</div>
-                </div>
-                <div>
-                  <RequestBadge method={event.httpType} fallback={event.requestType} />
-                </div>
-                <div>
-                  <StatusBadge status={event.result} />
-                </div>
-                <div>
-                  <TagBadge>{event.errorTag}</TagBadge>
-                </div>
-              </button>
-            ))
-          )}
+        <div className="overflow-hidden rounded border border-slate-800">
+          <table className="min-w-[760px] w-full divide-y divide-slate-800 text-sm">
+            <thead className="bg-slate-900/60 text-xs uppercase tracking-wide text-slate-400">
+              <tr>
+                <th className="px-4 py-2 text-left">Datetime</th>
+                <th className="px-4 py-2 text-left">Script</th>
+                <th className="px-4 py-2 text-left">Request Type</th>
+                <th className="px-4 py-2 text-left">Result</th>
+                <th className="px-4 py-2 text-left">Error Tag</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-800 bg-slate-900/30 text-slate-200">
+              {isLoading && (
+                <tr>
+                  <td className="px-4 py-6 text-center text-sm text-slate-400" colSpan={5}>
+                    Loading logs...
+                  </td>
+                </tr>
+              )}
+              {!isLoading && events.length === 0 && (
+                <tr>
+                  <td className="px-4 py-6 text-center text-sm text-slate-400" colSpan={5}>
+                    No log events match your filters yet.
+                  </td>
+                </tr>
+              )}
+              {!isLoading &&
+                events.map((event) => (
+                  <tr
+                    key={event.runId}
+                    onClick={() => setSelectedEvent(event)}
+                    className="cursor-pointer transition hover:bg-slate-800/60"
+                  >
+                    <td className="px-4 py-3">
+                      <div className="space-y-1 text-slate-200">
+                        <div className="font-semibold">{formatDateTime(event.timestamp)}</div>
+                        {event.message ? (
+                          <div className="line-clamp-1 text-xs text-slate-400" title={event.message}>
+                            {event.message}
+                          </div>
+                        ) : null}
+                      </div>
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="space-y-1">
+                        <div className="font-semibold text-slate-100">{event.scriptName}</div>
+                        <div className="text-xs text-slate-400">{event.collectionName}</div>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3">
+                      <RequestBadge method={event.httpType} fallback={event.requestType} />
+                    </td>
+                    <td className="px-4 py-3">
+                      <StatusBadge status={event.result} />
+                    </td>
+                    <td className="px-4 py-3">
+                      <TagBadge>{event.errorTag}</TagBadge>
+                    </td>
+                  </tr>
+                ))}
+            </tbody>
+          </table>
         </div>
       </div>
 
       {selectedEvent ? (
-        <div className="rounded-2xl border border-slate-800/80 bg-slate-950/80 p-5 shadow-xl shadow-slate-950/50">
-          <div className="mb-4 flex items-start justify-between gap-3">
-            <div>
+        <div className="rounded border border-slate-800 bg-slate-900/40 p-5 shadow-sm">
+          <div className="mb-4 flex items-start justify-between gap-3 border-b border-slate-800 pb-3">
+            <div className="space-y-1">
               <p className="text-[11px] uppercase tracking-[0.08em] text-slate-400">Log Details</p>
               <h5 className="text-xl font-semibold text-slate-50">{selectedEvent.scriptName}</h5>
               <p className="text-sm text-slate-400">{selectedEvent.collectionName}</p>
@@ -397,7 +414,7 @@ export default function SettingsLogs({ onAuthError }) {
             <button
               type="button"
               onClick={() => setSelectedEvent(null)}
-              className="rounded-lg border border-slate-800 bg-slate-900 px-3 py-1.5 text-sm font-semibold text-slate-100 transition hover:border-sky-500 hover:text-sky-200"
+              className="rounded border border-slate-700 bg-slate-950/60 px-3 py-1.5 text-sm font-semibold text-slate-100 transition hover:border-sky-500 hover:text-sky-200"
             >
               Close
             </button>
@@ -437,7 +454,7 @@ export default function SettingsLogs({ onAuthError }) {
           </dl>
 
           {selectedEvent.message ? (
-            <div className="mt-4 rounded-lg border border-slate-800/70 bg-slate-900/70 p-4 text-sm text-slate-100 shadow-inner shadow-slate-950/40">
+            <div className="mt-4 rounded border border-slate-800 bg-slate-950/40 p-4 text-sm text-slate-100">
               <p className="text-[11px] uppercase tracking-[0.08em] text-slate-400">Message</p>
               <p className="whitespace-pre-wrap text-slate-100">{selectedEvent.message}</p>
             </div>
@@ -450,9 +467,9 @@ export default function SettingsLogs({ onAuthError }) {
 
 function DetailRow({ label, value }) {
   return (
-    <div className="space-y-1 rounded border border-slate-200 bg-slate-50 p-3 dark:border-slate-800 dark:bg-slate-950/40">
-      <p className="text-[11px] uppercase tracking-wide text-slate-600 dark:text-slate-500">{label}</p>
-      <div className="text-sm text-slate-900 dark:text-slate-100">{value || <span className="text-slate-400">Unknown</span>}</div>
+    <div className="space-y-1 rounded border border-slate-800 bg-slate-950/40 p-3">
+      <p className="text-[11px] uppercase tracking-wide text-slate-500">{label}</p>
+      <div className="text-sm text-slate-100">{value || <span className="text-slate-500">Unknown</span>}</div>
     </div>
   );
 }

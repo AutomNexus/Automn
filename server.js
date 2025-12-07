@@ -8245,10 +8245,12 @@ app.get("/api/logs", async (req, res) => {
       `SELECT r.id AS run_id, r.start_time, r.status, r.http_method, r.triggered_by, r.triggered_by_user_id,
               s.id AS script_id, s.name AS script_name, s.endpoint AS script_endpoint, s.category_id,
               c.name AS collection_name,
+              u.username AS triggered_by_username, u.display_name AS triggered_by_display_name,
               l.automn_logs_json, l.stderr
          FROM runs r
          JOIN scripts s ON s.id = r.script_id
          LEFT JOIN categories c ON c.id = s.category_id
+         LEFT JOIN users u ON u.id = r.triggered_by_user_id
          LEFT JOIN script_permissions perms ON perms.script_id = s.id AND perms.user_id = ?
          LEFT JOIN category_permissions cperms ON cperms.category_id = s.category_id AND cperms.user_id = ?
          LEFT JOIN logs l ON l.run_id = r.id
@@ -8311,6 +8313,12 @@ app.get("/api/logs", async (req, res) => {
           return null;
         }
 
+        const triggeredByName =
+          row.triggered_by_display_name || row.triggered_by_username || null;
+        const requestOrigin = row.http_method
+          ? "API"
+          : row.triggered_by || row.triggered_by_username || "Host";
+
         return {
           runId: row.run_id,
           timestamp: row.start_time,
@@ -8322,6 +8330,10 @@ app.get("/api/logs", async (req, res) => {
           result: row.status || "unknown",
           httpType: row.http_method || null,
           requestType: row.http_method || row.triggered_by || null,
+          requestOrigin,
+          triggeredBy: row.triggered_by || null,
+          triggeredByUserId: row.triggered_by_user_id || null,
+          triggeredByUserName: triggeredByName,
           errorTag,
           errorTags: logTypes,
           message: normalizedLogs[0]?.message || row.stderr || "",

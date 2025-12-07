@@ -55,17 +55,6 @@ function getLogTypeTone(type) {
   return "border-slate-700 bg-slate-900/60 text-slate-300";
 }
 
-function hasAuthenticationLog(run) {
-  if (!run) return false;
-  if (Array.isArray(run.automn_log_types) && run.automn_log_types.length > 0) {
-    return run.automn_log_types.some((type) => (type || "").toLowerCase() === "authentication");
-  }
-  if (Array.isArray(run.automn_logs) && run.automn_logs.length > 0) {
-    return run.automn_logs.some((log) => (log?.type || "").toLowerCase() === "authentication");
-  }
-  return false;
-}
-
 function getMethodBadgeTone(method) {
   const normalized = (method || "").toUpperCase();
   const baseClasses =

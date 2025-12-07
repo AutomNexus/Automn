@@ -476,17 +476,17 @@ export default function SettingsLogs({ onAuthError }) {
       </div>
 
       {selectedEvent ? (
-        <div className="rounded border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900/40">
-          <div className="mb-4 flex items-start justify-between gap-3 border-b border-slate-200 pb-3 dark:border-slate-800">
+        <div className="rounded border border-slate-800 bg-slate-900/50 p-5 shadow-sm">
+          <div className="mb-4 flex items-start justify-between gap-3 border-b border-slate-800 pb-3">
             <div className="space-y-1">
-              <p className="text-[11px] uppercase tracking-[0.08em] text-slate-500 dark:text-slate-400">Log Details</p>
-              <h5 className="text-xl font-semibold text-slate-900 dark:text-slate-50">{selectedEvent.scriptName}</h5>
-              <p className="text-sm text-slate-600 dark:text-slate-400">{selectedEvent.collectionName}</p>
+              <p className="text-[11px] uppercase tracking-[0.08em] text-slate-400">Log Details</p>
+              <h5 className="text-xl font-semibold text-slate-50">{selectedEvent.scriptName}</h5>
+              <p className="text-sm text-slate-400">{selectedEvent.collectionName}</p>
             </div>
             <button
               type="button"
               onClick={() => setSelectedEvent(null)}
-              className="rounded border border-slate-300 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700 transition hover:border-sky-500 hover:text-sky-700 dark:border-slate-700 dark:bg-slate-950/60 dark:text-slate-100 dark:hover:text-sky-200"
+              className="rounded border border-slate-700 bg-slate-950/70 px-3 py-1.5 text-sm font-semibold text-slate-100 transition hover:border-sky-500 hover:text-sky-100"
             >
               Close
             </button>
@@ -500,10 +500,10 @@ export default function SettingsLogs({ onAuthError }) {
               value={
                 selectedEvent.runnerHostId ? (
                   <div className="space-y-0.5">
-                    <div className="font-semibold text-slate-900 dark:text-slate-100">
+                    <div className="font-semibold text-slate-100">
                       {selectedEvent.runnerName || selectedEvent.runnerHostId}
                     </div>
-                    <p className="text-xs text-slate-600 dark:text-slate-400">{selectedEvent.runnerHostId}</p>
+                    <p className="text-xs text-slate-400">{selectedEvent.runnerHostId}</p>
                   </div>
                 ) : (
                   <span className="text-slate-500">Unassigned</span>
@@ -541,9 +541,9 @@ export default function SettingsLogs({ onAuthError }) {
           </dl>
 
           {selectedEvent.message ? (
-            <div className="mt-4 rounded border border-slate-200 bg-slate-50 p-4 text-sm text-slate-800 shadow-sm dark:border-slate-800 dark:bg-slate-950/40 dark:text-slate-100">
-              <p className="text-[11px] uppercase tracking-[0.08em] text-slate-500 dark:text-slate-400">Message</p>
-              <p className="whitespace-pre-wrap text-slate-800 dark:text-slate-100">{selectedEvent.message}</p>
+            <div className="mt-4 rounded border border-slate-800 bg-slate-900/50 p-4 text-sm text-slate-100 shadow-sm">
+              <p className="text-[11px] uppercase tracking-[0.08em] text-slate-400">Message</p>
+              <p className="whitespace-pre-wrap text-slate-100">{selectedEvent.message}</p>
             </div>
           ) : null}
         </div>
@@ -554,9 +554,9 @@ export default function SettingsLogs({ onAuthError }) {
 
 function DetailRow({ label, value }) {
   return (
-    <div className="space-y-1 rounded border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-800 dark:bg-slate-950/40">
-      <p className="text-[11px] uppercase tracking-wide text-slate-600 dark:text-slate-500">{label}</p>
-      <div className="text-sm text-slate-900 dark:text-slate-100">{value || <span className="text-slate-500">Unknown</span>}</div>
+    <div className="space-y-1 rounded border border-slate-800 bg-slate-900/50 p-3 shadow-sm">
+      <p className="text-[11px] uppercase tracking-wide text-slate-400">{label}</p>
+      <div className="text-sm text-slate-100">{value || <span className="text-slate-500">Unknown</span>}</div>
     </div>
   );
 }

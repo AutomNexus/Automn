@@ -1620,117 +1620,151 @@ function hasHealthyRunnerHost(database, staleThresholdMs = 5 * 60 * 1000) {
 }
 
 function ensureAdminAccount(database = db) {
-  database.get(
-    "SELECT id, password_hash, deleted_at, is_active, is_admin FROM users WHERE username=?",
-    ["admin"],
-    (err, row) => {
-      if (err) {
-        console.error("Failed to verify admin account", err);
-        return;
-      }
+  const computeDefaultHash = () => {
+    try {
+      return hashPassword(DEFAULT_ADMIN_PASSWORD);
+    } catch (hashErr) {
+      console.error("Failed to hash default admin password", hashErr);
+      return null;
+    }
+  };
 
-      const computeDefaultHash = () => {
-        try {
-          return hashPassword(DEFAULT_ADMIN_PASSWORD);
-        } catch (hashErr) {
-          console.error("Failed to hash default admin password", hashErr);
-          return null;
-        }
-      };
-
-      if (!row) {
-        const passwordHash = computeDefaultHash();
-        if (!passwordHash) {
+  return new Promise((resolve, reject) => {
+    database.get(
+      "SELECT id, password_hash, deleted_at, is_active, is_admin, must_change_password FROM users WHERE username=?",
+      ["admin"],
+      (err, row) => {
+        if (err) {
+          console.error("Failed to verify admin account", err);
+          reject(err);
           return;
         }
 
-        database.run(
-          `INSERT INTO users (id, username, password_hash, must_change_password, is_active, is_admin)
-           VALUES (?, ?, ?, 1, 1, 1)`,
-          [uuidv4(), "admin", passwordHash],
-          (insertErr) => {
-            if (insertErr) {
-              console.error("Failed to create default admin account", insertErr);
-            }
-          },
-        );
-        return;
-      }
+        if (!row) {
+          const passwordHash = computeDefaultHash();
+          if (!passwordHash) {
+            resolve();
+            return;
+          }
 
-      if (row.deleted_at) {
-        const passwordHash = row.password_hash || computeDefaultHash();
-        if (!passwordHash) {
+          database.run(
+            `INSERT INTO users (id, username, password_hash, must_change_password, is_active, is_admin)
+             VALUES (?, ?, ?, 1, 1, 1)`,
+            [uuidv4(), "admin", passwordHash],
+            (insertErr) => {
+              if (insertErr) {
+                console.error("Failed to create default admin account", insertErr);
+                reject(insertErr);
+                return;
+              }
+              resolve();
+            },
+          );
           return;
         }
 
-        database.run(
-          `UPDATE users
-             SET deleted_at=NULL,
-                 is_active=1,
-                 is_admin=1,
-                 must_change_password=1,
-                 password_hash=?
-           WHERE id=?`,
-          [passwordHash, row.id],
-          (updateErr) => {
-            if (updateErr) {
-              console.error("Failed to restore default admin account", updateErr);
-            }
-          },
-        );
-        return;
-      }
+        if (row.deleted_at) {
+          const passwordHash = row.password_hash || computeDefaultHash();
+          if (!passwordHash) {
+            resolve();
+            return;
+          }
 
-      const updates = [];
-      const params = [];
-
-      let mustChangePassword = normalizeDbBoolean(row.must_change_password);
-
-      if (!row.password_hash) {
-        const passwordHash = computeDefaultHash();
-        if (!passwordHash) {
+          database.run(
+            `UPDATE users
+               SET deleted_at=NULL,
+                   is_active=1,
+                   is_admin=1,
+                   must_change_password=1,
+                   password_hash=?
+             WHERE id=?`,
+            [passwordHash, row.id],
+            (updateErr) => {
+              if (updateErr) {
+                console.error("Failed to restore default admin account", updateErr);
+                reject(updateErr);
+                return;
+              }
+              resolve();
+            },
+          );
           return;
         }
-        updates.push("password_hash=?");
-        params.push(passwordHash);
-        mustChangePassword = true;
-      } else if (verifyPassword(DEFAULT_ADMIN_PASSWORD, row.password_hash)) {
-        mustChangePassword = true;
-      }
 
-      if (!row.is_active) {
-        updates.push("is_active=1");
-      }
+        const updates = [];
+        const params = [];
 
-      if (!row.is_admin) {
-        updates.push("is_admin=1");
-      }
+        let mustChangePassword = normalizeDbBoolean(row.must_change_password);
 
-      if (mustChangePassword !== normalizeDbBoolean(row.must_change_password)) {
-        updates.push("must_change_password=?");
-        params.push(mustChangePassword ? 1 : 0);
-      }
+        if (!row.password_hash) {
+          const passwordHash = computeDefaultHash();
+          if (!passwordHash) {
+            resolve();
+            return;
+          }
+          updates.push("password_hash=?");
+          params.push(passwordHash);
+          mustChangePassword = true;
+        } else if (verifyPassword(DEFAULT_ADMIN_PASSWORD, row.password_hash)) {
+          mustChangePassword = true;
+        }
 
-      if (updates.length > 0) {
-        params.push(row.id);
-        database.run(
-          `UPDATE users SET ${updates.join(", ")} WHERE id=?`,
-          params,
-          (updateErr) => {
-            if (updateErr) {
-              console.error("Failed to update default admin account", updateErr);
-            }
-          },
-        );
-      }
-    },
-  );
+        if (!row.is_active) {
+          updates.push("is_active=1");
+        }
+
+        if (!row.is_admin) {
+          updates.push("is_admin=1");
+        }
+
+        if (mustChangePassword !== normalizeDbBoolean(row.must_change_password)) {
+          updates.push("must_change_password=?");
+          params.push(mustChangePassword ? 1 : 0);
+        }
+
+        if (updates.length > 0) {
+          params.push(row.id);
+          database.run(
+            `UPDATE users SET ${updates.join(", ")} WHERE id=?`,
+            params,
+            (updateErr) => {
+              if (updateErr) {
+                console.error("Failed to update default admin account", updateErr);
+                reject(updateErr);
+                return;
+              }
+              resolve();
+            },
+          );
+          return;
+        }
+
+        resolve();
+      },
+    );
+  });
 }
 
-initializeSchema(db);
-ensureAdminAccount(db);
+const schemaReady = new Promise((resolve, reject) => {
+  initializeSchema(db);
+  db.serialize(() => {
+    db.get("SELECT 1", (err) => {
+      if (err) {
+        reject(err);
+        return;
+      }
+      resolve();
+    });
+  });
+})
+  .then(() => ensureAdminAccount(db))
+  .catch((err) => {
+    console.error("Database initialization failed", err);
+    throw err;
+  });
 
 module.exports = db;
+module.exports.schemaReady = schemaReady;
 module.exports.ensureAdminAccount = () => ensureAdminAccount(db);
 module.exports.DB_PATH = DB_FILE;
 module.exports.createRunnerHost = (options) => createRunnerHostRecord(db, options);

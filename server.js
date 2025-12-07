@@ -8139,42 +8139,53 @@ app.get("/api/system/status", (_, res) =>
 // ─────────────────────────────────────────────
 // Start server + WebSocket
 // ─────────────────────────────────────────────
-const server = app.listen(PORT, () =>
-  console.log(`🍂 Automn running on http://localhost:${PORT}`)
-);
-
-const wss = new WebSocket.Server({ noServer: true });
-
-server.on("upgrade", (req, socket, head) => {
-  const url = new URL(req.url, `http://${req.headers.host}`);
-  if (url.pathname === "/api/ws") {
-    wss.handleUpgrade(req, socket, head, (ws) => {
-      wss.emit("connection", ws, req, url);
-    });
-  } else socket.destroy();
-});
-
-wss.on("connection", async (ws, req, url) => {
-  const auth = await authenticateRequest(req);
-  if (!auth) {
-    ws.close(1008, "Authentication required");
-    return;
+async function startServer() {
+  try {
+    await db.schemaReady;
+  } catch (err) {
+    console.error("Database not ready", err);
+    process.exit(1);
   }
 
-  if (auth.user.mustChangePassword) {
-    ws.close(1008, "Password change required");
-    return;
-  }
+  const server = app.listen(PORT, () =>
+    console.log(`🍂 Automn running on http://localhost:${PORT}`)
+  );
 
-  const runId = url.searchParams.get("runId");
-  if (!runId) {
-    ws.close(1008, "Missing runId");
-    return;
-  }
+  const wss = new WebSocket.Server({ noServer: true });
 
-  addSubscriber(runId, ws);
-  ws.send(JSON.stringify({ info: `Subscribed to run ${runId}` }));
-});
+  server.on("upgrade", (req, socket, head) => {
+    const url = new URL(req.url, `http://${req.headers.host}`);
+    if (url.pathname === "/api/ws") {
+      wss.handleUpgrade(req, socket, head, (ws) => {
+        wss.emit("connection", ws, req, url);
+      });
+    } else socket.destroy();
+  });
+
+  wss.on("connection", async (ws, req, url) => {
+    const auth = await authenticateRequest(req);
+    if (!auth) {
+      ws.close(1008, "Authentication required");
+      return;
+    }
+
+    if (auth.user.mustChangePassword) {
+      ws.close(1008, "Password change required");
+      return;
+    }
+
+    const runId = url.searchParams.get("runId");
+    if (!runId) {
+      ws.close(1008, "Missing runId");
+      return;
+    }
+
+    addSubscriber(runId, ws);
+    ws.send(JSON.stringify({ info: `Subscribed to run ${runId}` }));
+  });
+}
+
+startServer();
 
 //
 // LOGS
@@ -8245,7 +8256,7 @@ app.get("/api/logs", async (req, res) => {
       `SELECT r.id AS run_id, r.start_time, r.status, r.http_method, r.triggered_by, r.triggered_by_user_id,
               s.id AS script_id, s.name AS script_name, s.endpoint AS script_endpoint, s.category_id,
               c.name AS collection_name,
-              u.username AS triggered_by_username, u.display_name AS triggered_by_display_name,
+              u.username AS triggered_by_username, NULL AS triggered_by_display_name,
               l.automn_logs_json, l.stderr
          FROM runs r
          JOIN scripts s ON s.id = r.script_id

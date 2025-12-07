@@ -8211,6 +8211,10 @@ app.get("/api/logs", async (req, res) => {
       typeof req.query.scriptId === "string" && req.query.scriptId.trim()
         ? req.query.scriptId.trim()
         : null;
+    const runnerHostId =
+      typeof req.query.runnerHostId === "string" && req.query.runnerHostId.trim()
+        ? req.query.runnerHostId.trim()
+        : null;
     const resultFilter =
       typeof req.query.result === "string" && req.query.result.trim()
         ? req.query.result.trim().toLowerCase()
@@ -8255,12 +8259,16 @@ app.get("/api/logs", async (req, res) => {
     const rows = await dbAll(
       `SELECT r.id AS run_id, r.start_time, r.status, r.http_method, r.triggered_by, r.triggered_by_user_id,
               s.id AS script_id, s.name AS script_name, s.endpoint AS script_endpoint, s.category_id,
-              c.name AS collection_name,
+              s.runner_host_id, s.inherit_category_runner,
+              c.name AS collection_name, c.default_runner_host_id AS category_default_runner_host_id,
+              sr.name AS script_runner_name, cr.name AS category_runner_name,
               u.username AS triggered_by_username, NULL AS triggered_by_display_name,
               l.automn_logs_json, l.stderr
          FROM runs r
          JOIN scripts s ON s.id = r.script_id
          LEFT JOIN categories c ON c.id = s.category_id
+         LEFT JOIN runner_hosts sr ON sr.id = s.runner_host_id
+         LEFT JOIN runner_hosts cr ON cr.id = c.default_runner_host_id
          LEFT JOIN users u ON u.id = r.triggered_by_user_id
          LEFT JOIN script_permissions perms ON perms.script_id = s.id AND perms.user_id = ?
          LEFT JOIN category_permissions cperms ON cperms.category_id = s.category_id AND cperms.user_id = ?
@@ -8293,6 +8301,14 @@ app.get("/api/logs", async (req, res) => {
             runId: row.run_id,
           },
         });
+
+        const inheritCategoryRunner = row.inherit_category_runner !== 0;
+        const effectiveRunnerId =
+          row.runner_host_id || (inheritCategoryRunner ? row.category_default_runner_host_id : null) || null;
+
+        if (runnerHostId && effectiveRunnerId !== runnerHostId) {
+          return null;
+        }
 
         const logTypes = Array.from(
           new Set(
@@ -8348,6 +8364,12 @@ app.get("/api/logs", async (req, res) => {
           errorTag,
           errorTags: logTypes,
           message: normalizedLogs[0]?.message || row.stderr || "",
+          runnerHostId: effectiveRunnerId,
+          runnerName:
+            (row.runner_host_id && row.script_runner_name) ||
+            (inheritCategoryRunner && row.category_runner_name)
+              ? row.script_runner_name || row.category_runner_name || effectiveRunnerId
+              : effectiveRunnerId,
         };
       })
       .filter(Boolean);

@@ -224,16 +224,7 @@ export default function ScriptAnalytics({
                 const runKey = run.run_id || `run-${run.start_time}`;
                 const isActive = (run.run_id || null) === activeRun?.run_id;
                 const statusTone = getStatusTone(run.status);
-                const authenticationFlag =
-                  Boolean(run?.has_authentication_log) ||
-                  (Array.isArray(run.automn_log_types) &&
-                    run.automn_log_types.some(
-                      (type) => (type || "").toLowerCase() === "authentication",
-                    )) ||
-                  (Array.isArray(run.automn_logs) &&
-                    run.automn_logs.some(
-                      (log) => (log?.type || "").toLowerCase() === "authentication",
-                    ));
+                const authenticationFlag = hasAuthenticationLog(run);
                 const methodLabel =
                   typeof run.http_method === "string" && run.http_method.trim()
                     ? run.http_method.trim().toUpperCase()

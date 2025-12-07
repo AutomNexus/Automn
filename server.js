@@ -8248,6 +8248,14 @@ app.get("/api/logs/:endpoint", async (req, res) => {
         }
       }
       automnLogs.sort((a, b) => (a?.order ?? 0) - (b?.order ?? 0));
+      const automnLogTypes = Array.from(
+        new Set(
+          automnLogs
+            .map((log) => (log?.type || "").toLowerCase())
+            .filter((type) => type && typeof type === "string"),
+        ),
+      );
+      const hasAuthenticationLog = automnLogTypes.includes("authentication");
 
       let automnNotifications = [];
       if (row.automn_notifications_json) {
@@ -8283,6 +8291,8 @@ app.get("/api/logs/:endpoint", async (req, res) => {
         code_version: row.code_version,
         http_method: row.http_method || null,
         automn_logs: automnLogs,
+        automn_log_types: automnLogTypes,
+        has_authentication_log: hasAuthenticationLog,
         automn_notifications: automnNotifications,
         triggered_by: row.triggered_by || null,
         triggered_by_user_id: row.triggered_by_user_id || null,

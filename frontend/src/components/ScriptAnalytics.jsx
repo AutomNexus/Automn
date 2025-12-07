@@ -224,6 +224,7 @@ export default function ScriptAnalytics({
                 const runKey = run.run_id || `run-${run.start_time}`;
                 const isActive = (run.run_id || null) === activeRun?.run_id;
                 const statusTone = getStatusTone(run.status);
+                const authenticationFlag = hasAuthenticationLog(run);
                 const methodLabel =
                   typeof run.http_method === "string" && run.http_method.trim()
                     ? run.http_method.trim().toUpperCase()
@@ -233,25 +234,41 @@ export default function ScriptAnalytics({
                     <button
                       type="button"
                       onClick={() => setActiveRunId(run.run_id ?? null)}
-                      className={`w-full border-l-2 px-3 py-2 text-left transition-colors ${
-                        isActive
-                          ? "border-sky-400 bg-slate-800/60"
-                          : "border-transparent hover:bg-slate-800/40"
-                      }`}
-                    >
+                    className={`w-full border-l-2 px-3 py-2 text-left transition-colors ${
+                      isActive
+                        ? "border-sky-400 bg-slate-800/60"
+                        : "border-transparent hover:bg-slate-800/40"
+                    }`}
+                  >
                       <div className="flex items-center justify-between gap-3 text-xs">
-                        <span
-                          className={`text-[11px] font-semibold uppercase tracking-wide ${statusTone}`}
-                        >
-                          {run.status || "unknown"}
-                        </span>
+                        <div className="flex items-center gap-2">
+                          <span
+                            className={`text-[11px] font-semibold uppercase tracking-wide ${statusTone}`}
+                          >
+                            {run.status || "unknown"}
+                          </span>
+                          {authenticationFlag && (
+                            <span
+                              className={`rounded border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${getLogTypeTone(
+                                "authentication",
+                              )}`}
+                            >
+                              Authentication
+                            </span>
+                          )}
+                        </div>
                         <span className="text-[11px] text-slate-500">
                           {formatDuration(run.duration_ms)}
                         </span>
                       </div>
                       <div className="mt-1 flex items-center justify-between text-xs text-slate-300">
-                        <span className="truncate">{formatDate(run.start_time)}</span>
-                        
+                        <div className="flex items-center gap-2 truncate">
+                          <span className="truncate">{formatDate(run.start_time)}</span>
+                          {methodLabel && (
+                            <span className={getMethodBadgeTone(methodLabel)}>{methodLabel}</span>
+                          )}
+                        </div>
+
                       </div>
                     </button>
                   </li>

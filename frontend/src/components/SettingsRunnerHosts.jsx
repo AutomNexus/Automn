@@ -47,6 +47,10 @@ const RUNTIME_ICON_RULES = [
     test: (value) => value.includes("powershell") || value.includes("pwsh"),
     icon: createImageIcon("/powershell.svg", "PowerShell"),
   },
+  {
+    test: (value) => value.includes("shell"),
+    icon: createImageIcon("/shell.png", "Shell"),
+  },
 ];
 
 const DEFAULT_RUNTIME_ICON = createEmojiIcon("⚙️");
@@ -171,6 +175,7 @@ const RUNTIME_DISPLAY_NAMES = {
   python: "Python",
   powershell: "PowerShell",
   pwsh: "PowerShell",
+  shell: "Shell",
 };
 
 const formatRuntimeName = (value) => {

@@ -11,6 +11,7 @@ const LANGUAGE_OPTIONS = [
   { value: "node", label: "Node JS" },
   { value: "python", label: "Python" },
   { value: "powershell", label: "PowerShell" },
+  { value: "shell", label: "Shell" },
 ];
 
 const normalizeCategory = (entry) => ({

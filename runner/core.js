@@ -23,6 +23,7 @@ const {
 
 const powerShellLauncherCache = new Map();
 const pythonCommandCache = new Map();
+const shellCommandCache = new Map();
 
 function resolveWindowsShellExecutable() {
   const override = sanitizeExecutable(
@@ -277,6 +278,41 @@ function resolvePowerShellLauncher(preferredExecutable = null) {
   };
   powerShellLauncherCache.set(cacheKey, fallbackLauncher);
   return fallbackLauncher;
+}
+
+function resolveShellExecutable(preferredExecutable = null) {
+  const preferred = sanitizeExecutable(preferredExecutable || "");
+  const cacheKey = preferred || process.platform;
+
+  if (shellCommandCache.has(cacheKey)) {
+    return shellCommandCache.get(cacheKey);
+  }
+
+  const candidates = [];
+  const addCandidate = (command) => {
+    if (!command) return;
+    const sanitized = sanitizeExecutable(command);
+    if (!sanitized) return;
+    candidates.push(sanitized);
+  };
+
+  addCandidate(preferred);
+  addCandidate("bash");
+  addCandidate("sh");
+  if (process.platform === "win32") {
+    addCandidate(resolveWindowsShellExecutable());
+  }
+
+  let resolved = null;
+  for (const candidate of candidates) {
+    if (commandExists(candidate)) {
+      resolved = candidate;
+      break;
+    }
+  }
+
+  shellCommandCache.set(cacheKey, resolved);
+  return resolved;
 }
 
 const RETURN_MARKER = "__SCRIPTRETURN__";
@@ -645,13 +681,18 @@ async function executeScript({
     };
   }
 
-  const extMap = { python: "py", powershell: "ps1" };
+  const extMap = {
+    python: "py",
+    powershell: "ps1",
+    shell: "sh",
+  };
   let ext = "txt";
 
   const runtimeExecutables = {
     node: sanitizeExecutable(executables.node || ""),
     python: sanitizeExecutable(executables.python || ""),
     powershell: sanitizeExecutable(executables.powershell || ""),
+    shell: sanitizeExecutable(executables.shell || ""),
   };
 
   const scriptIdentifier = script.id || script.preassignedRunId || runId;
@@ -886,6 +927,64 @@ function AutomnNotify {
 }
 ${script.code}
     `,
+      shell: `#!/bin/sh
+AUTOMN_RETURN_MARKER=${JSON.stringify(RETURN_MARKER)}
+AUTOMN_LOG_MARKER=${JSON.stringify(LOG_MARKER)}
+AUTOMN_NOTIFY_MARKER=${JSON.stringify(NOTIFY_MARKER)}
+
+automn_normalize_json() {
+  node - <<'NODE' "$1"
+    const raw = process.argv[2];
+    try {
+      const parsed = JSON.parse(raw);
+      process.stdout.write(JSON.stringify(parsed));
+    } catch (err) {
+      const fallback = raw === undefined ? null : raw;
+      process.stdout.write(JSON.stringify(fallback));
+    }
+NODE
+}
+
+automn_normalize_level() {
+  node - <<'NODE' "$1"
+    const value = (process.argv[2] || "").toString().toLowerCase();
+    const normalized = value === "warn" || value === "error" ? value : "info";
+    process.stdout.write(JSON.stringify(normalized));
+NODE
+}
+
+AutomnReturn() {
+  local payload;
+  payload=$(automn_normalize_json "$1");
+  printf "%s%s\n" "$AUTOMN_RETURN_MARKER" "$payload";
+}
+
+AutomnLog() {
+  local message level normalizedContext;
+  message=$(automn_normalize_json "$1");
+  level=$(automn_normalize_level "$2");
+  if [ -n "$3" ]; then
+    normalizedContext=$(automn_normalize_json "$3");
+  else
+    normalizedContext="null";
+  fi
+  printf "%s{\"message\":%s,\"level\":%s,\"context\":%s}\n" "$AUTOMN_LOG_MARKER" "$message" "$level" "$normalizedContext";
+}
+
+AutomnRunLog() {
+  printf "%s\n" "$@";
+}
+
+AutomnNotify() {
+  local audience message level;
+  audience=$(automn_normalize_json "$1");
+  message=$(automn_normalize_json "$2");
+  level=$(automn_normalize_level "$3");
+  printf "%s{\"audience\":%s,\"message\":%s,\"level\":%s}\n" "$AUTOMN_NOTIFY_MARKER" "$audience" "$message" "$level";
+}
+
+${script.code}
+    `,
     };
 
     await fsp.mkdir(path.dirname(tmpPath), { recursive: true });
@@ -905,6 +1004,16 @@ ${script.code}
         return {
           command: launcher.command,
           args: [...launcher.args, tmpPath],
+        };
+      },
+      shell: () => {
+        const shellExecutable = resolveShellExecutable(runtimeExecutables.shell);
+        if (!shellExecutable) {
+          return null;
+        }
+        return {
+          command: shellExecutable,
+          args: [tmpPath],
         };
       },
     };
@@ -1194,6 +1303,7 @@ module.exports = {
   extractStructuredNotifications,
   resolvePowerShellLauncher,
   resolvePythonCommand,
+  resolveShellExecutable,
   resetPythonCommandCache,
   rehydratePackageCache,
   clearPackageCache,

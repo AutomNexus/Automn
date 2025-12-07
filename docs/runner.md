@@ -37,6 +37,8 @@ The host no longer embeds an execution engine—every script runs on a registere
 
 Log frames are forwarded verbatim; the final `result` payload includes `runId`, `stdout`, `stderr`, `code`, `duration`, `returnData`, `automnLogs`, `automnNotifications`, and the original `input`.
 
+Use `AutomnLog` to emit structured entries with an optional **type** to categorize events beyond success/error. For example, `AutomnLog("Token missing", "warn", { "area": "login" }, "authentication")` creates an authentication-focused log entry that surfaces separately from general run logs.
+
 ## Environment variables
 | Variable | Purpose |
 | --- | --- |

@@ -959,6 +959,50 @@ async function determineCodeVersionForScript(scriptId) {
 }
 
 function normalizeRunResultPayload(result, context) {
+  const normalizeLevel = (value) => {
+    const normalized = typeof value === "string" ? value.toLowerCase().trim() : "";
+    if (normalized === "warn" || normalized === "warning") return "warn";
+    if (normalized === "error") return "error";
+    if (normalized === "success") return "success";
+    if (normalized === "debug") return "debug";
+    return "info";
+  };
+
+  const normalizeLogContext = (value) => {
+    if (value && typeof value === "object" && !Array.isArray(value)) return value;
+    if (value === undefined || value === null) return {};
+    return { value };
+  };
+
+  const normalizeLogType = (value) => {
+    const normalized = typeof value === "string" ? value.trim().toLowerCase() : "";
+    return normalized || "general";
+  };
+
+  const normalizeAutomnLog = (log, index) => {
+    const messageValue =
+      log?.message === null || log?.message === undefined ? "" : log.message;
+    const timestamp =
+      typeof log?.timestamp === "string" && log.timestamp.trim()
+        ? log.timestamp
+        : new Date().toISOString();
+
+    return {
+      message: typeof messageValue === "string" ? messageValue : String(messageValue),
+      level: normalizeLevel(log?.level),
+      type: normalizeLogType(log?.type ?? log?.category),
+      context: normalizeLogContext(log?.context),
+      order: Number.isFinite(log?.order) ? log.order : index,
+      timestamp,
+    };
+  };
+
+  const normalizeAutomnLogs = (logs) => {
+    const parsedLogs = ensureArray(logs);
+    if (!parsedLogs.length) return [];
+    return parsedLogs.map((log, idx) => normalizeAutomnLog(log, idx));
+  };
+
   const fallbackDuration = Math.max(Date.now() - context.startTimestamp, 0);
   const rawCode = result?.code;
   const numericCodeCandidate = Number.isFinite(rawCode)
@@ -985,16 +1029,107 @@ function normalizeRunResultPayload(result, context) {
       result && Object.prototype.hasOwnProperty.call(result, "returnData")
         ? result.returnData
         : null,
-    automnLogs: ensureArray(result?.automnLogs),
+    automnLogs: normalizeAutomnLogs(result?.automnLogs),
     automnNotifications: ensureArray(result?.automnNotifications),
     input:
       result && Object.prototype.hasOwnProperty.call(result, "input")
         ? result.input
         : context.inputSnapshot,
+    httpMethod: context.httpMethod || null,
+    scriptId: context.scriptId || null,
+    errorCode:
+      typeof result?.errorCode === "string"
+        ? result.errorCode
+        : typeof result?.code === "string"
+          ? result.code
+          : null,
   };
 
   if (!normalized.runId) normalized.runId = context.runId;
   return normalized;
+}
+
+function buildFallbackAutomnLogs({
+  success,
+  failureReason,
+  errorCode,
+  context,
+}) {
+  const reasonText = typeof failureReason === "string" ? failureReason : "";
+  const normalizedErrorCode =
+    typeof errorCode === "string" ? errorCode.toLowerCase().trim() : "";
+  const authenticationCodes = new Set(["missing_token", "invalid_token", "unauthorized"]);
+  const isAuthenticationIssue =
+    authenticationCodes.has(normalizedErrorCode) ||
+    reasonText.toLowerCase().includes("authentication");
+
+  const type = isAuthenticationIssue ? "authentication" : "general";
+  const level = success ? "success" : isAuthenticationIssue ? "warn" : "error";
+  const message = success ? "Run completed successfully" : reasonText || "Run failed";
+
+  const fallbackContext = {};
+  if (context?.httpMethod) fallbackContext.httpMethod = context.httpMethod;
+  if (context?.scriptId) fallbackContext.scriptId = context.scriptId;
+  if (context?.runId) fallbackContext.runId = context.runId;
+
+  return [
+    {
+      message,
+      level,
+      type,
+      context: fallbackContext,
+      order: 0,
+      timestamp: new Date().toISOString(),
+    },
+  ];
+}
+
+function normalizeAutomnLogCollection(logs, fallbackDetails) {
+  const parsedLogs = ensureArray(logs);
+  if (!parsedLogs.length) {
+    return buildFallbackAutomnLogs(fallbackDetails);
+  }
+  return parsedLogs.map((log, idx) => {
+    const messageValue =
+      log?.message === null || log?.message === undefined ? "" : log.message;
+    const levelValue =
+      typeof log?.level === "string" ? log.level.toLowerCase().trim() : "";
+    const normalizedLevel =
+      levelValue === "warn" ||
+      levelValue === "warning" ||
+      levelValue === "error" ||
+      levelValue === "success" ||
+      levelValue === "debug"
+        ? levelValue === "warning"
+          ? "warn"
+          : levelValue
+        : "info";
+    const typeValue =
+      typeof log?.type === "string"
+        ? log.type.trim().toLowerCase()
+        : typeof log?.category === "string"
+          ? log.category.trim().toLowerCase()
+          : "";
+    const normalizedContext =
+      log?.context && typeof log.context === "object" && !Array.isArray(log.context)
+        ? log.context
+        : log?.context === undefined || log?.context === null
+          ? {}
+          : { value: log.context };
+    const timestamp =
+      typeof log?.timestamp === "string" && log.timestamp.trim()
+        ? log.timestamp
+        : new Date().toISOString();
+
+    return {
+      message: typeof messageValue === "string" ? messageValue : String(messageValue),
+      level: normalizedLevel,
+      type: typeValue || "general",
+      context: normalizedContext,
+      order: Number.isFinite(log?.order) ? log.order : idx,
+      timestamp,
+    };
+  });
 }
 
 async function createRunTracker({
@@ -1068,6 +1203,16 @@ async function createRunTracker({
       trimmedStderr || (normalized.code !== 0 ? "Script execution failed" : "");
 
     normalized.stderr = persistedStderr;
+    normalized.automnLogs = normalizeAutomnLogCollection(normalized.automnLogs, {
+      success,
+      failureReason: persistedStderr,
+      errorCode: normalized.errorCode,
+      context: {
+        httpMethod: normalized.httpMethod || context.httpMethod || null,
+        scriptId,
+        runId: normalized.runId,
+      },
+    });
     let returnJson = "null";
     try {
       returnJson = JSON.stringify(normalized.returnData);
@@ -1136,6 +1281,7 @@ async function createRunTracker({
         automnLogs: [],
         automnNotifications: [],
         input: inputSnapshot,
+        errorCode: failureError?.code,
       });
     },
   };
@@ -8102,6 +8248,14 @@ app.get("/api/logs/:endpoint", async (req, res) => {
         }
       }
       automnLogs.sort((a, b) => (a?.order ?? 0) - (b?.order ?? 0));
+      const automnLogTypes = Array.from(
+        new Set(
+          automnLogs
+            .map((log) => (log?.type || "").toLowerCase())
+            .filter((type) => type && typeof type === "string"),
+        ),
+      );
+      const hasAuthenticationLog = automnLogTypes.includes("authentication");
 
       let automnNotifications = [];
       if (row.automn_notifications_json) {
@@ -8137,6 +8291,8 @@ app.get("/api/logs/:endpoint", async (req, res) => {
         code_version: row.code_version,
         http_method: row.http_method || null,
         automn_logs: automnLogs,
+        automn_log_types: automnLogTypes,
+        has_authentication_log: hasAuthenticationLog,
         automn_notifications: automnNotifications,
         triggered_by: row.triggered_by || null,
         triggered_by_user_id: row.triggered_by_user_id || null,

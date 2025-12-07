@@ -583,6 +583,32 @@ function extractStructuredLogs(rawOutput) {
   let cleaned = "";
   let remaining = rawOutput || "";
 
+  const normalizeLevel = (value) => {
+    const normalized = typeof value === "string" ? value.toLowerCase().trim() : "";
+    if (normalized === "warn" || normalized === "warning") return "warn";
+    if (normalized === "error") return "error";
+    if (normalized === "success") return "success";
+    if (normalized === "debug") return "debug";
+    return "info";
+  };
+
+  const normalizeType = (value) => {
+    const rawType =
+      typeof value === "string"
+        ? value
+        : typeof value?.category === "string"
+          ? value.category
+          : null;
+    const normalized = rawType ? rawType.trim().toLowerCase() : "";
+    return normalized || "general";
+  };
+
+  const normalizeContext = (value) => {
+    if (value && typeof value === "object" && !Array.isArray(value)) return value;
+    if (value === undefined || value === null) return {};
+    return { value };
+  };
+
   while (remaining.length) {
     const idx = remaining.indexOf(marker);
     if (idx === -1) {
@@ -605,10 +631,15 @@ function extractStructuredLogs(rawOutput) {
 
     try {
       const parsed = JSON.parse(jsonPart);
+      const messageValue =
+        parsed.message === null || parsed.message === undefined
+          ? ""
+          : parsed.message;
       logs.push({
-        message: parsed.message ?? "",
-        level: parsed.level || "info",
-        context: parsed.context ?? {},
+        message: typeof messageValue === "string" ? messageValue : String(messageValue),
+        level: normalizeLevel(parsed.level),
+        type: normalizeType(parsed.type ?? parsed.category),
+        context: normalizeContext(parsed.context),
         order: logs.length,
         timestamp: new Date().toISOString(),
       });
@@ -733,7 +764,7 @@ async function executeScript({
             duration: 0,
             returnData: null,
             automnLogs: [
-              { level: "error", message: detailMessage },
+              { level: "error", message: detailMessage, type: "system" },
             ],
             automnNotifications: [],
             input: inputSnapshot,
@@ -771,8 +802,8 @@ async function executeScript({
         try { console.log(AUTOMN_RETURN_MARKER + JSON.stringify(data)); }
         catch(e){ console.error("Failed to serialize AutomnReturn data:", e); }
       };
-      global.AutomnLog = (message, level = "info", context = {}) => {
-        try { console.log(AUTOMN_LOG_MARKER + JSON.stringify({ message, level, context })); }
+      global.AutomnLog = (message, level = "info", context = {}, type = "general") => {
+        try { console.log(AUTOMN_LOG_MARKER + JSON.stringify({ message, level, context, type })); }
         catch(e){ console.error("Failed to serialize AutomnLog data:", e); }
       };
       global.AutomnRunLog = (...values) => {
@@ -804,8 +835,8 @@ AUTOMN_NOTIFY_MARKER = ${JSON.stringify(NOTIFY_MARKER)}
 def AutomnReturn(data):
   try: print(AUTOMN_RETURN_MARKER+json.dumps(data))
   except Exception as e: print("Failed to serialize AutomnReturn data:",e,file=sys.stderr)
-def AutomnLog(message, level="info", context=None):
-  try: print(AUTOMN_LOG_MARKER+json.dumps({"message": message, "level": level, "context": context}))
+def AutomnLog(message, level="info", context=None, log_type="general"):
+  try: print(AUTOMN_LOG_MARKER+json.dumps({"message": message, "level": level, "context": context, "type": log_type}))
   except Exception as e: print("Failed to serialize AutomnLog data:",e,file=sys.stderr)
 def AutomnNotify(audience, message, level="info"):
   try:
@@ -881,10 +912,11 @@ function AutomnLog {
   param(
     [Parameter(Mandatory=$true)][string]$Message,
     [string]$Level = "info",
-    $Context = $null
+    $Context = $null,
+    [string]$Type = "general"
   )
   try {
-    $payload = @{ message = $Message; level = $Level; context = $Context } | ConvertTo-Json -Depth $AutomnJsonDepth -Compress
+    $payload = @{ message = $Message; level = $Level; context = $Context; type = $Type } | ConvertTo-Json -Depth $AutomnJsonDepth -Compress
     Write-Output ($AutomnLogMarker + $payload)
   }
   catch { Write-Error "Failed to serialize AutomnLog data: $_" }
@@ -948,8 +980,22 @@ NODE
 automn_normalize_level() {
   node - <<'NODE' "$1"
     const value = (process.argv[2] || "").toString().toLowerCase();
-    const normalized = value === "warn" || value === "error" ? value : "info";
+    const normalized =
+      value === "warn" ||
+      value === "error" ||
+      value === "success" ||
+      value === "debug"
+        ? value
+        : "info";
     process.stdout.write(JSON.stringify(normalized));
+NODE
+}
+
+automn_normalize_log_type() {
+  node - <<'NODE' "$1"
+    const raw = process.argv[2];
+    const normalized = typeof raw === "string" ? raw.trim().toLowerCase() : "";
+    process.stdout.write(JSON.stringify(normalized || "general"));
 NODE
 }
 
@@ -960,7 +1006,7 @@ AutomnReturn() {
 }
 
 AutomnLog() {
-  local message level normalizedContext;
+  local message level normalizedContext logType;
   message=$(automn_normalize_json "$1");
   level=$(automn_normalize_level "$2");
   if [ -n "$3" ]; then
@@ -968,7 +1014,8 @@ AutomnLog() {
   else
     normalizedContext="null";
   fi
-  printf "%s{\"message\":%s,\"level\":%s,\"context\":%s}\n" "$AUTOMN_LOG_MARKER" "$message" "$level" "$normalizedContext";
+  logType=$(automn_normalize_log_type "$4");
+  printf "%s{\"message\":%s,\"level\":%s,\"context\":%s,\"type\":%s}\n" "$AUTOMN_LOG_MARKER" "$message" "$level" "$normalizedContext" "$logType";
 }
 
 AutomnRunLog() {

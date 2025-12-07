@@ -8180,6 +8180,162 @@ wss.on("connection", async (ws, req, url) => {
 // LOGS
 //
 
+app.get("/api/logs", async (req, res) => {
+  try {
+    const user = req.user;
+    if (!user) {
+      res.status(401).json({ error: "Authentication required" });
+      return;
+    }
+
+    const normalizedSearch =
+      typeof req.query.search === "string" ? req.query.search.trim().toLowerCase() : "";
+    const normalizedErrorTag =
+      typeof req.query.errorTag === "string" ? req.query.errorTag.trim().toLowerCase() : "";
+    const collectionId =
+      typeof req.query.collectionId === "string" && req.query.collectionId.trim()
+        ? req.query.collectionId.trim()
+        : null;
+    const scriptId =
+      typeof req.query.scriptId === "string" && req.query.scriptId.trim()
+        ? req.query.scriptId.trim()
+        : null;
+    const resultFilter =
+      typeof req.query.result === "string" && req.query.result.trim()
+        ? req.query.result.trim().toLowerCase()
+        : null;
+    const httpType =
+      typeof req.query.httpType === "string" && req.query.httpType.trim()
+        ? req.query.httpType.trim().toUpperCase()
+        : null;
+
+    const limitParam = Number(req.query.limit);
+    const limit = Number.isFinite(limitParam) ? Math.min(Math.max(limitParam, 1), 500) : 200;
+
+    const params = [user.id, user.id];
+    let whereClause = "WHERE s.is_recycled = 0 AND s.is_draft = 0";
+
+    if (!user.isAdmin) {
+      whereClause +=
+        " AND (s.owner_id = ? OR s.category_id = ? OR perms.can_read = 1 OR perms.can_write = 1 OR perms.can_delete = 1 OR perms.can_run = 1 OR perms.can_clear_logs = 1 OR (s.inherit_category_permissions <> 0 AND (cperms.can_read = 1 OR cperms.can_write = 1 OR cperms.can_delete = 1 OR cperms.can_run = 1 OR cperms.can_clear_logs = 1)))";
+      params.push(user.id, DEFAULT_CATEGORY_ID);
+    }
+
+    if (collectionId) {
+      whereClause += " AND s.category_id = ?";
+      params.push(collectionId);
+    }
+
+    if (scriptId) {
+      whereClause += " AND s.id = ?";
+      params.push(scriptId);
+    }
+
+    if (resultFilter) {
+      whereClause += " AND LOWER(r.status) = ?";
+      params.push(resultFilter);
+    }
+
+    if (httpType) {
+      whereClause += " AND LOWER(r.http_method) = ?";
+      params.push(httpType.toLowerCase());
+    }
+
+    const rows = await dbAll(
+      `SELECT r.id AS run_id, r.start_time, r.status, r.http_method, r.triggered_by, r.triggered_by_user_id,
+              s.id AS script_id, s.name AS script_name, s.endpoint AS script_endpoint, s.category_id,
+              c.name AS collection_name,
+              l.automn_logs_json, l.stderr
+         FROM runs r
+         JOIN scripts s ON s.id = r.script_id
+         LEFT JOIN categories c ON c.id = s.category_id
+         LEFT JOIN script_permissions perms ON perms.script_id = s.id AND perms.user_id = ?
+         LEFT JOIN category_permissions cperms ON cperms.category_id = s.category_id AND cperms.user_id = ?
+         LEFT JOIN logs l ON l.run_id = r.id
+        ${whereClause}
+        ORDER BY r.start_time DESC
+        LIMIT ?`,
+      [...params, limit],
+    );
+
+    const events = rows
+      .map((row) => {
+        let parsedLogs = [];
+        if (row.automn_logs_json) {
+          try {
+            const parsed = JSON.parse(row.automn_logs_json);
+            if (Array.isArray(parsed)) parsedLogs = parsed;
+          } catch (err) {
+            parsedLogs = [];
+          }
+        }
+
+        const normalizedLogs = normalizeAutomnLogCollection(parsedLogs, {
+          success: (row.status || "").toLowerCase() === "success",
+          failureReason: row.stderr || "",
+          errorCode: null,
+          context: {
+            httpMethod: row.http_method,
+            scriptId: row.script_id,
+            runId: row.run_id,
+          },
+        });
+
+        const logTypes = Array.from(
+          new Set(
+            normalizedLogs
+              .map((log) => (typeof log?.type === "string" ? log.type.toLowerCase() : ""))
+              .filter(Boolean),
+          ),
+        );
+
+        const errorTag = logTypes.find((type) => type === "authentication") || logTypes[0] || null;
+
+        const searchableText = [
+          row.script_name,
+          row.script_endpoint,
+          row.collection_name,
+          row.triggered_by,
+          errorTag,
+          ...normalizedLogs.map((log) => log.message || ""),
+        ]
+          .filter(Boolean)
+          .join(" \n ")
+          .toLowerCase();
+
+        if (normalizedSearch && !searchableText.includes(normalizedSearch)) {
+          return null;
+        }
+
+        if (normalizedErrorTag && !logTypes.includes(normalizedErrorTag)) {
+          return null;
+        }
+
+        return {
+          runId: row.run_id,
+          timestamp: row.start_time,
+          scriptId: row.script_id,
+          scriptName: row.script_name || row.script_endpoint,
+          scriptEndpoint: row.script_endpoint,
+          collectionId: row.category_id || null,
+          collectionName: row.collection_name || "Uncategorized",
+          result: row.status || "unknown",
+          httpType: row.http_method || null,
+          requestType: row.http_method || row.triggered_by || null,
+          errorTag,
+          errorTags: logTypes,
+          message: normalizedLogs[0]?.message || row.stderr || "",
+        };
+      })
+      .filter(Boolean);
+
+    res.json({ events, total: events.length });
+  } catch (err) {
+    console.error("Failed to load consolidated logs", err);
+    res.status(500).json({ error: "Failed to load consolidated logs" });
+  }
+});
+
 // ─────────────────────────────
 // Run history / analytics
 // ─────────────────────────────

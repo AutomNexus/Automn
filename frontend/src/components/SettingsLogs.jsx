@@ -91,6 +91,7 @@ export default function SettingsLogs({ onAuthError }) {
   const [scripts, setScripts] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
+  const [selectedEvent, setSelectedEvent] = useState(null);
   const [filters, setFilters] = useState({
     collectionId: "",
     scriptId: "",
@@ -152,6 +153,14 @@ export default function SettingsLogs({ onAuthError }) {
     }, 250);
     return () => clearTimeout(timer);
   }, [filters, loadEvents]);
+
+  useEffect(() => {
+    if (!selectedEvent) return;
+    const stillPresent = events.some((event) => event.runId === selectedEvent.runId);
+    if (!stillPresent) {
+      setSelectedEvent(null);
+    }
+  }, [events, selectedEvent]);
 
   const collectionOptions = useMemo(() => {
     const options = new Map();
@@ -338,9 +347,11 @@ export default function SettingsLogs({ onAuthError }) {
             </div>
           ) : (
             events.map((event) => (
-              <div
+              <button
                 key={event.runId}
-                className="grid min-w-[700px] grid-cols-12 items-center border-b border-slate-800/60 px-4 py-3 text-sm hover:bg-slate-800/40"
+                type="button"
+                onClick={() => setSelectedEvent(event)}
+                className="grid min-w-[700px] grid-cols-12 items-center border-b border-slate-800/60 px-4 py-3 text-left text-sm hover:bg-slate-800/40 focus:outline-none focus:ring-2 focus:ring-sky-500/60"
               >
                 <div className="col-span-3 space-y-1 text-slate-200">
                   <div className="font-medium">{formatDateTime(event.timestamp)}</div>
@@ -363,11 +374,79 @@ export default function SettingsLogs({ onAuthError }) {
                 <div className="col-span-2">
                   <TagBadge>{event.errorTag}</TagBadge>
                 </div>
-              </div>
+              </button>
             ))
           )}
         </div>
       </div>
+
+      {selectedEvent ? (
+        <div className="rounded border border-slate-800 bg-slate-900/80 p-4 shadow-xl">
+          <div className="mb-3 flex items-start justify-between gap-3">
+            <div>
+              <p className="text-xs uppercase tracking-wide text-slate-400">Log Details</p>
+              <h5 className="text-lg font-semibold text-slate-100">{selectedEvent.scriptName}</h5>
+              <p className="text-sm text-slate-400">{selectedEvent.collectionName}</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setSelectedEvent(null)}
+              className="rounded border border-slate-700 bg-slate-800 px-3 py-1 text-sm font-semibold text-slate-100 hover:border-sky-500 hover:text-sky-200"
+            >
+              Close
+            </button>
+          </div>
+
+          <dl className="grid grid-cols-1 gap-3 md:grid-cols-2">
+            <DetailRow label="Timestamp" value={formatDateTime(selectedEvent.timestamp)} />
+            <DetailRow label="Result" value={<StatusBadge status={selectedEvent.result} />} />
+            <DetailRow
+              label="Request Origin"
+              value={
+                <div className="space-y-1">
+                  <RequestBadge method={selectedEvent.httpType} fallback={selectedEvent.requestOrigin} />
+                  {selectedEvent.triggeredByUserName ? (
+                    <p className="text-xs text-slate-400">Triggered by {selectedEvent.triggeredByUserName}</p>
+                  ) : selectedEvent.triggeredBy ? (
+                    <p className="text-xs text-slate-400">Triggered by {selectedEvent.triggeredBy}</p>
+                  ) : null}
+                </div>
+              }
+            />
+            <DetailRow label="Endpoint" value={selectedEvent.scriptEndpoint || "Unknown"} />
+            <DetailRow
+              label="Error Tags"
+              value={
+                selectedEvent.errorTags?.length ? (
+                  <div className="flex flex-wrap gap-2">
+                    {selectedEvent.errorTags.map((tag) => (
+                      <TagBadge key={tag}>{tag}</TagBadge>
+                    ))}
+                  </div>
+                ) : (
+                  <span className="text-slate-400">None</span>
+                )
+              }
+            />
+          </dl>
+
+          {selectedEvent.message ? (
+            <div className="mt-4 rounded border border-slate-800 bg-slate-950/40 p-3 text-sm text-slate-100">
+              <p className="text-xs uppercase tracking-wide text-slate-500">Message</p>
+              <p className="whitespace-pre-wrap text-slate-100">{selectedEvent.message}</p>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function DetailRow({ label, value }) {
+  return (
+    <div className="space-y-1 rounded border border-slate-800 bg-slate-950/40 p-3">
+      <p className="text-[11px] uppercase tracking-wide text-slate-500">{label}</p>
+      <div className="text-sm text-slate-100">{value || <span className="text-slate-400">Unknown</span>}</div>
     </div>
   );
 }

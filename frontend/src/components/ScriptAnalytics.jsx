@@ -55,6 +55,28 @@ function getLogTypeTone(type) {
   return "border-slate-700 bg-slate-900/60 text-slate-300";
 }
 
+function hasAuthenticationLog(run) {
+  if (!run) return false;
+
+  if (typeof run.has_authentication_log === "boolean") {
+    return run.has_authentication_log;
+  }
+
+  if (Array.isArray(run.automn_log_types)) {
+    return run.automn_log_types.some(
+      (type) => typeof type === "string" && type.toLowerCase() === "authentication",
+    );
+  }
+
+  if (Array.isArray(run.automn_logs)) {
+    return run.automn_logs.some(
+      (log) => typeof log?.type === "string" && log.type.toLowerCase() === "authentication",
+    );
+  }
+
+  return false;
+}
+
 function getMethodBadgeTone(method) {
   const normalized = (method || "").toUpperCase();
   const baseClasses =

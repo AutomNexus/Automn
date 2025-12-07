@@ -20,6 +20,10 @@ const NODE_SNIPPETS = [
     value: "AutomnLog(\"Critical failure\", \"error\");\n",
   },
   {
+    label: "AutomnLog (authentication)",
+    value: "AutomnLog(\"Token missing\", \"warn\", { area: \"login\" }, \"authentication\");\n",
+  },
+  {
     label: "AutomnRunLog",
     value: "AutomnRunLog(\"Debug info\", { context: \"runner\" });\n",
   },
@@ -45,6 +49,10 @@ const PYTHON_SNIPPETS = [
   {
     label: "AutomnLog (error)",
     value: "AutomnLog(\"Critical failure\", \"error\")\n",
+  },
+  {
+    label: "AutomnLog (authentication)",
+    value: "AutomnLog(\"Token missing\", \"warn\", {\"area\": \"login\"}, \"authentication\")\n",
   },
   {
     label: "AutomnRunLog",
@@ -74,6 +82,10 @@ const POWERSHELL_SNIPPETS = [
     value: "AutomnLog \"Critical failure\" \"error\"\n",
   },
   {
+    label: "AutomnLog (authentication)",
+    value: "AutomnLog \"Token missing\" \"warn\" @{ area = \"login\" } \"authentication\"\n",
+  },
+  {
     label: "AutomnRunLog",
     value: "AutomnRunLog \"Debug info\" @{ context = \"runner\" }\n",
   },
@@ -99,6 +111,10 @@ const SHELL_SNIPPETS = [
   {
     label: "AutomnLog (error)",
     value: "AutomnLog \"Critical failure\" \"error\"\n",
+  },
+  {
+    label: "AutomnLog (authentication)",
+    value: "AutomnLog \"Token missing\" \"warn\" '{\"area\":\"login\"}' \"authentication\"\n",
   },
   {
     label: "AutomnRunLog",

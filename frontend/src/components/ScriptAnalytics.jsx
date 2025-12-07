@@ -38,6 +38,23 @@ function formatPayload(value) {
   }
 }
 
+function getLogLevelTone(level) {
+  const normalized = (level || "").toLowerCase();
+  if (normalized === "error") return "text-red-400";
+  if (normalized === "warn" || normalized === "warning") return "text-amber-300";
+  if (normalized === "success") return "text-emerald-300";
+  if (normalized === "debug") return "text-indigo-300";
+  return "text-sky-300";
+}
+
+function getLogTypeTone(type) {
+  const normalized = (type || "").toLowerCase();
+  if (normalized === "authentication") {
+    return "border-amber-500/70 bg-amber-900/20 text-amber-200";
+  }
+  return "border-slate-700 bg-slate-900/60 text-slate-300";
+}
+
 function getMethodBadgeTone(method) {
   const normalized = (method || "").toUpperCase();
   const baseClasses =
@@ -317,17 +334,18 @@ export default function ScriptAnalytics({
                         className="rounded border border-slate-800 bg-slate-950/50 p-2"
                       >
                         <div className="flex items-center justify-between text-xs">
-                          <span
-                            className={`font-semibold uppercase ${
-                              log.level === "error"
-                                ? "text-red-400"
-                                : log.level === "warn"
-                                ? "text-amber-300"
-                                : "text-sky-300"
-                            }`}
-                          >
-                            {log.level || "info"}
-                          </span>
+                          <div className="flex items-center gap-2">
+                            <span
+                              className={`font-semibold uppercase ${getLogLevelTone(log.level)}`}
+                            >
+                              {log.level || "info"}
+                            </span>
+                            <span
+                              className={`rounded border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${getLogTypeTone(log.type)}`}
+                            >
+                              {log.type || "general"}
+                            </span>
+                          </div>
                           <span className="font-mono text-[11px] text-slate-500">
                             {log.timestamp ? formatDate(log.timestamp) : `#${log.order ?? index + 1}`}
                           </span>

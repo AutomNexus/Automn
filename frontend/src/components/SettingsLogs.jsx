@@ -195,7 +195,7 @@ export default function SettingsLogs({ onAuthError }) {
       if (queryFilters.httpType) params.set("httpType", queryFilters.httpType);
       if (queryFilters.errorTag) params.set("errorTag", queryFilters.errorTag);
       if (queryFilters.search) params.set("search", queryFilters.search);
-      params.set("limit", "200");
+      params.set("limit", "200000");
 
       const query = params.toString();
       const data = await apiRequest(`/api/logs${query ? `?${query}` : ""}`);

@@ -85,6 +85,7 @@ services:
       - ./logs:/app/logs
     environment:
       - NODE_ENV=production
+      - TZ=Australia/Sydney
     restart: unless-stopped
 
   automn-runner:
@@ -102,6 +103,7 @@ services:
       - AUTOMN_RUNNER_ID=default
       - AUTOMN_HOST_URL=http://<Automn Host IP>:8088
       - AUTOMN_RUNNER_PUBLIC_URL=http://<Automn Runner IP>:3030
+      - TZ=Australia/Sydney
 ```
 
 - Browse to the host: http://<Automn Host IP>:8088 and login with user: admin and password: scriptfall (You'll need to update the password)

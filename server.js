@@ -61,7 +61,7 @@ const REQUEST_BODY_LIMIT_BYTES = 16 * 1024 * 1024;
 
 const app = express();
 app.use(cors({ origin: true, credentials: true }));
-app.use(bodyParser.json({ limit: "16mb" }));
+app.use(bodyParser.json({ limit: "64mb" }));
 const PORT = process.env.PORT || 8088;
 
 const ENCRYPTION_MAGIC = Buffer.from("AUTOMNENC1");
@@ -2986,7 +2986,99 @@ function quoteIdentifier(value) {
   return `"${String(value).replace(/"/g, '""')}"`;
 }
 
-async function restoreDatabaseFromFile(filePath) {
+function normalizeRestoreFlag(value, defaultValue = true) {
+  if (typeof value === "boolean") {
+    return value;
+  }
+
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    if (normalized === "true") return true;
+    if (normalized === "false") return false;
+  }
+
+  return defaultValue;
+}
+
+function normalizeRestoreOptions(raw = {}) {
+  const defaults = {
+    restoreScripts: true,
+    restoreVariables: true,
+    restoreRunners: true,
+    restoreCollections: true,
+    restoreUsers: true,
+  };
+
+  if (!raw || typeof raw !== "object") {
+    return defaults;
+  }
+
+  return {
+    restoreScripts: normalizeRestoreFlag(raw.restoreScripts, defaults.restoreScripts),
+    restoreVariables: normalizeRestoreFlag(raw.restoreVariables, defaults.restoreVariables),
+    restoreRunners: normalizeRestoreFlag(raw.restoreRunners, defaults.restoreRunners),
+    restoreCollections: normalizeRestoreFlag(raw.restoreCollections, defaults.restoreCollections),
+    restoreUsers: normalizeRestoreFlag(raw.restoreUsers, defaults.restoreUsers),
+  };
+}
+
+const RESTORE_TABLE_RULES = [
+  { table: "scripts", predicate: (options) => options.restoreScripts },
+  { table: "script_versions", predicate: (options) => options.restoreScripts },
+  { table: "script_packages", predicate: (options) => options.restoreScripts },
+  {
+    table: "script_permissions",
+    predicate: (options) => options.restoreScripts && options.restoreUsers,
+  },
+  {
+    table: "script_variables",
+    predicate: (options) => options.restoreVariables && options.restoreScripts,
+  },
+  { table: "global_variables", predicate: (options) => options.restoreVariables },
+  {
+    table: "category_variables",
+    predicate: (options) => options.restoreVariables && options.restoreCollections,
+  },
+  { table: "runner_hosts", predicate: (options) => options.restoreRunners },
+  { table: "categories", predicate: (options) => options.restoreCollections },
+  {
+    table: "category_permissions",
+    predicate: (options) => options.restoreCollections && options.restoreUsers,
+  },
+  { table: "users", predicate: (options) => options.restoreUsers },
+  { table: "user_preferences", predicate: (options) => options.restoreUsers },
+];
+
+function shouldRestoreTable(name, options) {
+  const rule = RESTORE_TABLE_RULES.find((entry) => entry.table === name);
+  if (!rule) return true;
+  return Boolean(rule.predicate(options));
+}
+
+async function disconnectRestoredRunners() {
+  await dbRun(
+    `UPDATE runner_hosts
+       SET endpoint=NULL,
+           status_message='Runner restored from backup. Reconnect the agent.',
+           last_seen_at=NULL,
+           max_concurrency=NULL,
+           timeout_ms=NULL,
+           runner_version=NULL,
+           runner_os=NULL,
+           runner_platform=NULL,
+           runner_arch=NULL,
+           runner_uptime=NULL,
+           runner_runtimes=NULL,
+           status=CASE
+             WHEN disabled_at IS NOT NULL OR status=? THEN ?
+             ELSE ?
+           END`,
+    [RUNNER_STATUS.DISABLED, RUNNER_STATUS.DISABLED, RUNNER_STATUS.PENDING],
+  );
+}
+
+async function restoreDatabaseFromFile(filePath, rawOptions = {}) {
+  const options = normalizeRestoreOptions(rawOptions);
   let transactionActive = false;
   let attached = false;
   try {
@@ -3009,9 +3101,14 @@ async function restoreDatabaseFromFile(filePath) {
     for (const table of backupTables) {
       const name = table?.name;
       if (!name || !allowed.has(name) || skipTables.has(name)) continue;
+      if (!shouldRestoreTable(name, options)) continue;
       const quoted = quoteIdentifier(name);
       await dbRun(`DELETE FROM ${quoted}`);
       await dbRun(`INSERT INTO ${quoted} SELECT * FROM restore_src.${quoted}`);
+    }
+
+    if (options.restoreRunners) {
+      await disconnectRestoredRunners();
     }
 
     await dbRun("DELETE FROM sessions");
@@ -4426,6 +4523,7 @@ app.get("/api/data/backup", requireAdmin, async (req, res) => {
 
 app.post("/api/data/restore", requireAdmin, async (req, res) => {
   const { backup, password = "" } = req.body || {};
+  const restoreOptions = normalizeRestoreOptions(req.body || {});
 
   if (typeof backup !== "string" || backup.trim().length === 0) {
     res.status(400).json({ error: "Backup payload is required" });
@@ -4465,8 +4563,10 @@ app.post("/api/data/restore", requireAdmin, async (req, res) => {
 
   try {
     await fsp.writeFile(tempPath, buffer);
-    await restoreDatabaseFromFile(tempPath);
-    refreshScriptRoutes();
+    await restoreDatabaseFromFile(tempPath, restoreOptions);
+    if (restoreOptions.restoreScripts) {
+      refreshScriptRoutes();
+    }
     res.json({ restored: true });
   } catch (err) {
     console.error("Restore failed", err);

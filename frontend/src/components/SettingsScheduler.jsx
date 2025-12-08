@@ -47,6 +47,22 @@ function normalizeTimeLabel(value, fallback = "00:00") {
   return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
 }
 
+function formatLocalDateTime(value) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value);
+  return new Intl.DateTimeFormat([], {
+    year: "numeric",
+    month: "short",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+    timeZoneName: "short",
+  }).format(date);
+}
+
 function formatScheduleSummary(job) {
   if (!job?.schedule) return "No schedule";
   const schedule = job.schedule;
@@ -614,11 +630,11 @@ export default function SettingsScheduler({ onAuthError }) {
                   </div>
                   <div>
                     <div className="font-semibold text-slate-300">Next run</div>
-                    <div>{job.nextRunAt || "Pending"}</div>
+                    <div>{job.nextRunAt ? formatLocalDateTime(job.nextRunAt) : "Pending"}</div>
                   </div>
                   <div>
                     <div className="font-semibold text-slate-300">Last run</div>
-                    <div>{job.lastRunAt || "—"}</div>
+                    <div>{job.lastRunAt ? formatLocalDateTime(job.lastRunAt) : "—"}</div>
                   </div>
                 </div>
                 <div className="mt-3 flex flex-wrap gap-2 text-xs">

@@ -26,6 +26,7 @@ const HTTP_METHOD_OPTIONS = [
 ];
 
 const DATE_RANGE_OPTIONS = [
+  { value: "1h", label: "Last hour" },
   { value: "24h", label: "Last 24 hours" },
   { value: "week", label: "Last week" },
   { value: "month", label: "Last month" },
@@ -125,7 +126,7 @@ export default function SettingsLogs({ onAuthError }) {
     httpType: "",
     errorTag: "",
     search: "",
-    dateRange: "24h",
+    dateRange: "1h",
     customFrom: "",
     customTo: "",
   });
@@ -291,6 +292,10 @@ export default function SettingsLogs({ onAuthError }) {
     let end = null;
 
     switch (filters.dateRange) {
+      case "1h":
+        start = now - 1 * 60 * 60 * 1000;
+        end = now;
+        break;
       case "24h":
         start = now - 24 * 60 * 60 * 1000;
         end = now;

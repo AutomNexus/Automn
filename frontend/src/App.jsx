@@ -13,6 +13,7 @@ import SettingsRunnerHosts from "./components/SettingsRunnerHosts";
 import SettingsData from "./components/SettingsData";
 import SettingsCategories from "./components/SettingsCategories";
 import SettingsGlobalVariables from "./components/SettingsGlobalVariables";
+import SettingsLogs from "./components/SettingsLogs";
 import { apiRequest } from "./utils/api";
 import { DEFAULT_THEME_ID, THEMES, THEME_ORDER } from "./utils/themes";
 
@@ -141,6 +142,7 @@ const SETTINGS_TABS = [
   { id: "collections", label: "Collections" },
   { id: "global-variables", label: "Global Variables" },
   { id: "data", label: "Data" },
+  { id: "logs", label: "Logs" },
   { id: "users", label: "Users" },
   { id: "runners", label: "Runners" },
 ];
@@ -3224,6 +3226,9 @@ export default function App() {
                 {settingsTab === "data" && currentUser?.isAdmin && (
                   <SettingsData onAuthError={handleAuthError} />
                 )}
+                {settingsTab === "logs" && (
+                  <SettingsLogs onAuthError={handleAuthError} />
+                )}
                 {settingsTab === "users" && currentUser?.isAdmin && (
                   <SettingsUsers
                     currentUser={currentUser}
@@ -3233,7 +3238,7 @@ export default function App() {
                 {settingsTab === "runners" && currentUser?.isAdmin && (
                   <SettingsRunnerHosts onAuthError={handleAuthError} />
                 )}
-                {!["ui", "collections", "global-variables", "data", "users", "runners"].includes(
+                {!["ui", "collections", "global-variables", "data", "logs", "users", "runners"].includes(
                   settingsTab,
                 ) && (
                     <div className="flex h-full items-center justify-center rounded border border-dashed border-slate-800 bg-slate-900/40 p-6 text-center text-sm text-slate-400">

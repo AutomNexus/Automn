@@ -959,6 +959,50 @@ async function determineCodeVersionForScript(scriptId) {
 }
 
 function normalizeRunResultPayload(result, context) {
+  const normalizeLevel = (value) => {
+    const normalized = typeof value === "string" ? value.toLowerCase().trim() : "";
+    if (normalized === "warn" || normalized === "warning") return "warn";
+    if (normalized === "error") return "error";
+    if (normalized === "success") return "success";
+    if (normalized === "debug") return "debug";
+    return "info";
+  };
+
+  const normalizeLogContext = (value) => {
+    if (value && typeof value === "object" && !Array.isArray(value)) return value;
+    if (value === undefined || value === null) return {};
+    return { value };
+  };
+
+  const normalizeLogType = (value) => {
+    const normalized = typeof value === "string" ? value.trim().toLowerCase() : "";
+    return normalized || "general";
+  };
+
+  const normalizeAutomnLog = (log, index) => {
+    const messageValue =
+      log?.message === null || log?.message === undefined ? "" : log.message;
+    const timestamp =
+      typeof log?.timestamp === "string" && log.timestamp.trim()
+        ? log.timestamp
+        : new Date().toISOString();
+
+    return {
+      message: typeof messageValue === "string" ? messageValue : String(messageValue),
+      level: normalizeLevel(log?.level),
+      type: normalizeLogType(log?.type ?? log?.category),
+      context: normalizeLogContext(log?.context),
+      order: Number.isFinite(log?.order) ? log.order : index,
+      timestamp,
+    };
+  };
+
+  const normalizeAutomnLogs = (logs) => {
+    const parsedLogs = ensureArray(logs);
+    if (!parsedLogs.length) return [];
+    return parsedLogs.map((log, idx) => normalizeAutomnLog(log, idx));
+  };
+
   const fallbackDuration = Math.max(Date.now() - context.startTimestamp, 0);
   const rawCode = result?.code;
   const numericCodeCandidate = Number.isFinite(rawCode)
@@ -985,16 +1029,107 @@ function normalizeRunResultPayload(result, context) {
       result && Object.prototype.hasOwnProperty.call(result, "returnData")
         ? result.returnData
         : null,
-    automnLogs: ensureArray(result?.automnLogs),
+    automnLogs: normalizeAutomnLogs(result?.automnLogs),
     automnNotifications: ensureArray(result?.automnNotifications),
     input:
       result && Object.prototype.hasOwnProperty.call(result, "input")
         ? result.input
         : context.inputSnapshot,
+    httpMethod: context.httpMethod || null,
+    scriptId: context.scriptId || null,
+    errorCode:
+      typeof result?.errorCode === "string"
+        ? result.errorCode
+        : typeof result?.code === "string"
+          ? result.code
+          : null,
   };
 
   if (!normalized.runId) normalized.runId = context.runId;
   return normalized;
+}
+
+function buildFallbackAutomnLogs({
+  success,
+  failureReason,
+  errorCode,
+  context,
+}) {
+  const reasonText = typeof failureReason === "string" ? failureReason : "";
+  const normalizedErrorCode =
+    typeof errorCode === "string" ? errorCode.toLowerCase().trim() : "";
+  const authenticationCodes = new Set(["missing_token", "invalid_token", "unauthorized"]);
+  const isAuthenticationIssue =
+    authenticationCodes.has(normalizedErrorCode) ||
+    reasonText.toLowerCase().includes("authentication");
+
+  const type = isAuthenticationIssue ? "authentication" : "general";
+  const level = success ? "success" : isAuthenticationIssue ? "warn" : "error";
+  const message = success ? "Run completed successfully" : reasonText || "Run failed";
+
+  const fallbackContext = {};
+  if (context?.httpMethod) fallbackContext.httpMethod = context.httpMethod;
+  if (context?.scriptId) fallbackContext.scriptId = context.scriptId;
+  if (context?.runId) fallbackContext.runId = context.runId;
+
+  return [
+    {
+      message,
+      level,
+      type,
+      context: fallbackContext,
+      order: 0,
+      timestamp: new Date().toISOString(),
+    },
+  ];
+}
+
+function normalizeAutomnLogCollection(logs, fallbackDetails) {
+  const parsedLogs = ensureArray(logs);
+  if (!parsedLogs.length) {
+    return buildFallbackAutomnLogs(fallbackDetails);
+  }
+  return parsedLogs.map((log, idx) => {
+    const messageValue =
+      log?.message === null || log?.message === undefined ? "" : log.message;
+    const levelValue =
+      typeof log?.level === "string" ? log.level.toLowerCase().trim() : "";
+    const normalizedLevel =
+      levelValue === "warn" ||
+      levelValue === "warning" ||
+      levelValue === "error" ||
+      levelValue === "success" ||
+      levelValue === "debug"
+        ? levelValue === "warning"
+          ? "warn"
+          : levelValue
+        : "info";
+    const typeValue =
+      typeof log?.type === "string"
+        ? log.type.trim().toLowerCase()
+        : typeof log?.category === "string"
+          ? log.category.trim().toLowerCase()
+          : "";
+    const normalizedContext =
+      log?.context && typeof log.context === "object" && !Array.isArray(log.context)
+        ? log.context
+        : log?.context === undefined || log?.context === null
+          ? {}
+          : { value: log.context };
+    const timestamp =
+      typeof log?.timestamp === "string" && log.timestamp.trim()
+        ? log.timestamp
+        : new Date().toISOString();
+
+    return {
+      message: typeof messageValue === "string" ? messageValue : String(messageValue),
+      level: normalizedLevel,
+      type: typeValue || "general",
+      context: normalizedContext,
+      order: Number.isFinite(log?.order) ? log.order : idx,
+      timestamp,
+    };
+  });
 }
 
 async function createRunTracker({
@@ -1068,6 +1203,16 @@ async function createRunTracker({
       trimmedStderr || (normalized.code !== 0 ? "Script execution failed" : "");
 
     normalized.stderr = persistedStderr;
+    normalized.automnLogs = normalizeAutomnLogCollection(normalized.automnLogs, {
+      success,
+      failureReason: persistedStderr,
+      errorCode: normalized.errorCode,
+      context: {
+        httpMethod: normalized.httpMethod || context.httpMethod || null,
+        scriptId,
+        runId: normalized.runId,
+      },
+    });
     let returnJson = "null";
     try {
       returnJson = JSON.stringify(normalized.returnData);
@@ -1136,6 +1281,7 @@ async function createRunTracker({
         automnLogs: [],
         automnNotifications: [],
         input: inputSnapshot,
+        errorCode: failureError?.code,
       });
     },
   };
@@ -7993,46 +8139,247 @@ app.get("/api/system/status", (_, res) =>
 // ─────────────────────────────────────────────
 // Start server + WebSocket
 // ─────────────────────────────────────────────
-const server = app.listen(PORT, () =>
-  console.log(`🍂 Automn running on http://localhost:${PORT}`)
-);
-
-const wss = new WebSocket.Server({ noServer: true });
-
-server.on("upgrade", (req, socket, head) => {
-  const url = new URL(req.url, `http://${req.headers.host}`);
-  if (url.pathname === "/api/ws") {
-    wss.handleUpgrade(req, socket, head, (ws) => {
-      wss.emit("connection", ws, req, url);
-    });
-  } else socket.destroy();
-});
-
-wss.on("connection", async (ws, req, url) => {
-  const auth = await authenticateRequest(req);
-  if (!auth) {
-    ws.close(1008, "Authentication required");
-    return;
+async function startServer() {
+  try {
+    await db.schemaReady;
+  } catch (err) {
+    console.error("Database not ready", err);
+    process.exit(1);
   }
 
-  if (auth.user.mustChangePassword) {
-    ws.close(1008, "Password change required");
-    return;
-  }
+  const server = app.listen(PORT, () =>
+    console.log(`🍂 Automn running on http://localhost:${PORT}`)
+  );
 
-  const runId = url.searchParams.get("runId");
-  if (!runId) {
-    ws.close(1008, "Missing runId");
-    return;
-  }
+  const wss = new WebSocket.Server({ noServer: true });
 
-  addSubscriber(runId, ws);
-  ws.send(JSON.stringify({ info: `Subscribed to run ${runId}` }));
-});
+  server.on("upgrade", (req, socket, head) => {
+    const url = new URL(req.url, `http://${req.headers.host}`);
+    if (url.pathname === "/api/ws") {
+      wss.handleUpgrade(req, socket, head, (ws) => {
+        wss.emit("connection", ws, req, url);
+      });
+    } else socket.destroy();
+  });
+
+  wss.on("connection", async (ws, req, url) => {
+    const auth = await authenticateRequest(req);
+    if (!auth) {
+      ws.close(1008, "Authentication required");
+      return;
+    }
+
+    if (auth.user.mustChangePassword) {
+      ws.close(1008, "Password change required");
+      return;
+    }
+
+    const runId = url.searchParams.get("runId");
+    if (!runId) {
+      ws.close(1008, "Missing runId");
+      return;
+    }
+
+    addSubscriber(runId, ws);
+    ws.send(JSON.stringify({ info: `Subscribed to run ${runId}` }));
+  });
+}
+
+startServer();
 
 //
 // LOGS
 //
+
+app.get("/api/logs", async (req, res) => {
+  try {
+    const user = req.user;
+    if (!user) {
+      res.status(401).json({ error: "Authentication required" });
+      return;
+    }
+
+    const normalizedSearch =
+      typeof req.query.search === "string" ? req.query.search.trim().toLowerCase() : "";
+    const normalizedErrorTag =
+      typeof req.query.errorTag === "string" ? req.query.errorTag.trim().toLowerCase() : "";
+    const collectionId =
+      typeof req.query.collectionId === "string" && req.query.collectionId.trim()
+        ? req.query.collectionId.trim()
+        : null;
+    const scriptId =
+      typeof req.query.scriptId === "string" && req.query.scriptId.trim()
+        ? req.query.scriptId.trim()
+        : null;
+    const runnerHostId =
+      typeof req.query.runnerHostId === "string" && req.query.runnerHostId.trim()
+        ? req.query.runnerHostId.trim()
+        : null;
+    const resultFilter =
+      typeof req.query.result === "string" && req.query.result.trim()
+        ? req.query.result.trim().toLowerCase()
+        : null;
+    const httpType =
+      typeof req.query.httpType === "string" && req.query.httpType.trim()
+        ? req.query.httpType.trim().toUpperCase()
+        : null;
+
+    const limitParam = Number(req.query.limit);
+    const limit = Number.isFinite(limitParam) ? Math.min(Math.max(limitParam, 1), 500) : 200;
+
+    const params = [user.id, user.id];
+    let whereClause = "WHERE s.is_recycled = 0 AND s.is_draft = 0";
+
+    if (!user.isAdmin) {
+      whereClause +=
+        " AND (s.owner_id = ? OR s.category_id = ? OR perms.can_read = 1 OR perms.can_write = 1 OR perms.can_delete = 1 OR perms.can_run = 1 OR perms.can_clear_logs = 1 OR (s.inherit_category_permissions <> 0 AND (cperms.can_read = 1 OR cperms.can_write = 1 OR cperms.can_delete = 1 OR cperms.can_run = 1 OR cperms.can_clear_logs = 1)))";
+      params.push(user.id, DEFAULT_CATEGORY_ID);
+    }
+
+    if (collectionId) {
+      whereClause += " AND s.category_id = ?";
+      params.push(collectionId);
+    }
+
+    if (scriptId) {
+      whereClause += " AND s.id = ?";
+      params.push(scriptId);
+    }
+
+    if (resultFilter) {
+      whereClause += " AND LOWER(r.status) = ?";
+      params.push(resultFilter);
+    }
+
+    if (httpType) {
+      whereClause += " AND LOWER(r.http_method) = ?";
+      params.push(httpType.toLowerCase());
+    }
+
+    const rows = await dbAll(
+      `SELECT r.id AS run_id, r.start_time, r.status, r.http_method, r.triggered_by, r.triggered_by_user_id,
+              s.id AS script_id, s.name AS script_name, s.endpoint AS script_endpoint, s.category_id,
+              s.runner_host_id, s.inherit_category_runner,
+              c.name AS collection_name, c.default_runner_host_id AS category_default_runner_host_id,
+              sr.name AS script_runner_name, cr.name AS category_runner_name,
+              u.username AS triggered_by_username, NULL AS triggered_by_display_name,
+              l.automn_logs_json, l.stderr
+         FROM runs r
+         JOIN scripts s ON s.id = r.script_id
+         LEFT JOIN categories c ON c.id = s.category_id
+         LEFT JOIN runner_hosts sr ON sr.id = s.runner_host_id
+         LEFT JOIN runner_hosts cr ON cr.id = c.default_runner_host_id
+         LEFT JOIN users u ON u.id = r.triggered_by_user_id
+         LEFT JOIN script_permissions perms ON perms.script_id = s.id AND perms.user_id = ?
+         LEFT JOIN category_permissions cperms ON cperms.category_id = s.category_id AND cperms.user_id = ?
+         LEFT JOIN logs l ON l.run_id = r.id
+        ${whereClause}
+        ORDER BY r.start_time DESC
+        LIMIT ?`,
+      [...params, limit],
+    );
+
+    const events = rows
+      .map((row) => {
+        let parsedLogs = [];
+        if (row.automn_logs_json) {
+          try {
+            const parsed = JSON.parse(row.automn_logs_json);
+            if (Array.isArray(parsed)) parsedLogs = parsed;
+          } catch (err) {
+            parsedLogs = [];
+          }
+        }
+
+        const normalizedLogs = normalizeAutomnLogCollection(parsedLogs, {
+          success: (row.status || "").toLowerCase() === "success",
+          failureReason: row.stderr || "",
+          errorCode: null,
+          context: {
+            httpMethod: row.http_method,
+            scriptId: row.script_id,
+            runId: row.run_id,
+          },
+        });
+
+        const inheritCategoryRunner = row.inherit_category_runner !== 0;
+        const effectiveRunnerId =
+          row.runner_host_id || (inheritCategoryRunner ? row.category_default_runner_host_id : null) || null;
+
+        if (runnerHostId && effectiveRunnerId !== runnerHostId) {
+          return null;
+        }
+
+        const logTypes = Array.from(
+          new Set(
+            normalizedLogs
+              .map((log) => (typeof log?.type === "string" ? log.type.toLowerCase() : ""))
+              .filter(Boolean),
+          ),
+        );
+
+        const errorTag = logTypes.find((type) => type === "authentication") || logTypes[0] || null;
+
+        const searchableText = [
+          row.script_name,
+          row.script_endpoint,
+          row.collection_name,
+          row.triggered_by,
+          errorTag,
+          ...normalizedLogs.map((log) => log.message || ""),
+        ]
+          .filter(Boolean)
+          .join(" \n ")
+          .toLowerCase();
+
+        if (normalizedSearch && !searchableText.includes(normalizedSearch)) {
+          return null;
+        }
+
+        if (normalizedErrorTag && !logTypes.includes(normalizedErrorTag)) {
+          return null;
+        }
+
+        const triggeredByName =
+          row.triggered_by_display_name || row.triggered_by_username || null;
+        const requestOrigin = row.http_method
+          ? "API"
+          : row.triggered_by || row.triggered_by_username || "Host";
+
+        return {
+          runId: row.run_id,
+          timestamp: row.start_time,
+          scriptId: row.script_id,
+          scriptName: row.script_name || row.script_endpoint,
+          scriptEndpoint: row.script_endpoint,
+          collectionId: row.category_id || null,
+          collectionName: row.collection_name || "Uncategorized",
+          result: row.status || "unknown",
+          httpType: row.http_method || null,
+          requestType: row.http_method || row.triggered_by || null,
+          requestOrigin,
+          triggeredBy: row.triggered_by || null,
+          triggeredByUserId: row.triggered_by_user_id || null,
+          triggeredByUserName: triggeredByName,
+          errorTag,
+          errorTags: logTypes,
+          message: normalizedLogs[0]?.message || row.stderr || "",
+          runnerHostId: effectiveRunnerId,
+          runnerName:
+            (row.runner_host_id && row.script_runner_name) ||
+            (inheritCategoryRunner && row.category_runner_name)
+              ? row.script_runner_name || row.category_runner_name || effectiveRunnerId
+              : effectiveRunnerId,
+        };
+      })
+      .filter(Boolean);
+
+    res.json({ events, total: events.length });
+  } catch (err) {
+    console.error("Failed to load consolidated logs", err);
+    res.status(500).json({ error: "Failed to load consolidated logs" });
+  }
+});
 
 // ─────────────────────────────
 // Run history / analytics
@@ -8102,6 +8449,14 @@ app.get("/api/logs/:endpoint", async (req, res) => {
         }
       }
       automnLogs.sort((a, b) => (a?.order ?? 0) - (b?.order ?? 0));
+      const automnLogTypes = Array.from(
+        new Set(
+          automnLogs
+            .map((log) => (log?.type || "").toLowerCase())
+            .filter((type) => type && typeof type === "string"),
+        ),
+      );
+      const hasAuthenticationLog = automnLogTypes.includes("authentication");
 
       let automnNotifications = [];
       if (row.automn_notifications_json) {
@@ -8137,6 +8492,8 @@ app.get("/api/logs/:endpoint", async (req, res) => {
         code_version: row.code_version,
         http_method: row.http_method || null,
         automn_logs: automnLogs,
+        automn_log_types: automnLogTypes,
+        has_authentication_log: hasAuthenticationLog,
         automn_notifications: automnNotifications,
         triggered_by: row.triggered_by || null,
         triggered_by_user_id: row.triggered_by_user_id || null,

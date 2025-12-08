@@ -38,6 +38,45 @@ function formatPayload(value) {
   }
 }
 
+function getLogLevelTone(level) {
+  const normalized = (level || "").toLowerCase();
+  if (normalized === "error") return "text-red-400";
+  if (normalized === "warn" || normalized === "warning") return "text-amber-300";
+  if (normalized === "success") return "text-emerald-300";
+  if (normalized === "debug") return "text-indigo-300";
+  return "text-sky-300";
+}
+
+function getLogTypeTone(type) {
+  const normalized = (type || "").toLowerCase();
+  if (normalized === "authentication") {
+    return "border-amber-500/70 bg-amber-900/20 text-amber-200";
+  }
+  return "border-slate-700 bg-slate-900/60 text-slate-300";
+}
+
+function hasAuthenticationLog(run) {
+  if (!run) return false;
+
+  if (typeof run.has_authentication_log === "boolean") {
+    return run.has_authentication_log;
+  }
+
+  if (Array.isArray(run.automn_log_types)) {
+    return run.automn_log_types.some(
+      (type) => typeof type === "string" && type.toLowerCase() === "authentication",
+    );
+  }
+
+  if (Array.isArray(run.automn_logs)) {
+    return run.automn_logs.some(
+      (log) => typeof log?.type === "string" && log.type.toLowerCase() === "authentication",
+    );
+  }
+
+  return false;
+}
+
 function getMethodBadgeTone(method) {
   const normalized = (method || "").toUpperCase();
   const baseClasses =
@@ -207,6 +246,7 @@ export default function ScriptAnalytics({
                 const runKey = run.run_id || `run-${run.start_time}`;
                 const isActive = (run.run_id || null) === activeRun?.run_id;
                 const statusTone = getStatusTone(run.status);
+                const authenticationFlag = hasAuthenticationLog(run);
                 const methodLabel =
                   typeof run.http_method === "string" && run.http_method.trim()
                     ? run.http_method.trim().toUpperCase()
@@ -216,25 +256,41 @@ export default function ScriptAnalytics({
                     <button
                       type="button"
                       onClick={() => setActiveRunId(run.run_id ?? null)}
-                      className={`w-full border-l-2 px-3 py-2 text-left transition-colors ${
-                        isActive
-                          ? "border-sky-400 bg-slate-800/60"
-                          : "border-transparent hover:bg-slate-800/40"
-                      }`}
-                    >
+                    className={`w-full border-l-2 px-3 py-2 text-left transition-colors ${
+                      isActive
+                        ? "border-sky-400 bg-slate-800/60"
+                        : "border-transparent hover:bg-slate-800/40"
+                    }`}
+                  >
                       <div className="flex items-center justify-between gap-3 text-xs">
-                        <span
-                          className={`text-[11px] font-semibold uppercase tracking-wide ${statusTone}`}
-                        >
-                          {run.status || "unknown"}
-                        </span>
+                        <div className="flex items-center gap-2">
+                          <span
+                            className={`text-[11px] font-semibold uppercase tracking-wide ${statusTone}`}
+                          >
+                            {run.status || "unknown"}
+                          </span>
+                          {authenticationFlag && (
+                            <span
+                              className={`rounded border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${getLogTypeTone(
+                                "authentication",
+                              )}`}
+                            >
+                              Authentication
+                            </span>
+                          )}
+                        </div>
                         <span className="text-[11px] text-slate-500">
                           {formatDuration(run.duration_ms)}
                         </span>
                       </div>
                       <div className="mt-1 flex items-center justify-between text-xs text-slate-300">
-                        <span className="truncate">{formatDate(run.start_time)}</span>
-                        
+                        <div className="flex items-center gap-2 truncate">
+                          <span className="truncate">{formatDate(run.start_time)}</span>
+                          {methodLabel && (
+                            <span className={getMethodBadgeTone(methodLabel)}>{methodLabel}</span>
+                          )}
+                        </div>
+
                       </div>
                     </button>
                   </li>
@@ -317,17 +373,18 @@ export default function ScriptAnalytics({
                         className="rounded border border-slate-800 bg-slate-950/50 p-2"
                       >
                         <div className="flex items-center justify-between text-xs">
-                          <span
-                            className={`font-semibold uppercase ${
-                              log.level === "error"
-                                ? "text-red-400"
-                                : log.level === "warn"
-                                ? "text-amber-300"
-                                : "text-sky-300"
-                            }`}
-                          >
-                            {log.level || "info"}
-                          </span>
+                          <div className="flex items-center gap-2">
+                            <span
+                              className={`font-semibold uppercase ${getLogLevelTone(log.level)}`}
+                            >
+                              {log.level || "info"}
+                            </span>
+                            <span
+                              className={`rounded border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${getLogTypeTone(log.type)}`}
+                            >
+                              {log.type || "general"}
+                            </span>
+                          </div>
                           <span className="font-mono text-[11px] text-slate-500">
                             {log.timestamp ? formatDate(log.timestamp) : `#${log.order ?? index + 1}`}
                           </span>

@@ -14,6 +14,7 @@ import SettingsData from "./components/SettingsData";
 import SettingsCategories from "./components/SettingsCategories";
 import SettingsGlobalVariables from "./components/SettingsGlobalVariables";
 import SettingsLogs from "./components/SettingsLogs";
+import SettingsScheduler from "./components/SettingsScheduler";
 import { apiRequest } from "./utils/api";
 import { DEFAULT_THEME_ID, THEMES, THEME_ORDER } from "./utils/themes";
 
@@ -145,6 +146,7 @@ const SETTINGS_TABS = [
   { id: "logs", label: "Logs" },
   { id: "users", label: "Users" },
   { id: "runners", label: "Runners" },
+  { id: "scheduler", label: "Scheduler" },
 ];
 
 const ADMIN_ONLY_SETTINGS_TABS = new Set([
@@ -153,6 +155,7 @@ const ADMIN_ONLY_SETTINGS_TABS = new Set([
   "data",
   "users",
   "runners",
+  "scheduler",
 ]);
 
 const LOGIN_THEME_ID = "automn";
@@ -3238,7 +3241,10 @@ export default function App() {
                 {settingsTab === "runners" && currentUser?.isAdmin && (
                   <SettingsRunnerHosts onAuthError={handleAuthError} />
                 )}
-                {!["ui", "collections", "global-variables", "data", "logs", "users", "runners"].includes(
+                {settingsTab === "scheduler" && currentUser?.isAdmin && (
+                  <SettingsScheduler onAuthError={handleAuthError} />
+                )}
+                {!["ui", "collections", "global-variables", "data", "logs", "users", "runners", "scheduler"].includes(
                   settingsTab,
                 ) && (
                     <div className="flex h-full items-center justify-center rounded border border-dashed border-slate-800 bg-slate-900/40 p-6 text-center text-sm text-slate-400">

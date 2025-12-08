@@ -3774,7 +3774,7 @@ app.get("/api/users", requireAdmin, async (req, res) => {
     const rows = await dbAll(
       `SELECT id, username, is_admin, is_active, must_change_password, created_at, last_login, is_system
          FROM users
-        WHERE deleted_at IS NULL
+        WHERE deleted_at IS NULL AND is_system=0
         ORDER BY username COLLATE NOCASE ASC`,
     );
     res.json({ users: rows.map(sanitizeUserRow).filter(Boolean) });

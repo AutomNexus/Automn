@@ -205,20 +205,28 @@ export default function SettingsScheduler({ onAuthError }) {
       };
 
       if (editingId) {
-        await apiRequest(`/api/settings/scheduler/jobs/${editingId}`, {
+        const response = await apiRequest(`/api/settings/scheduler/jobs/${editingId}`, {
           method: "PATCH",
           body: payload,
         });
+        if (response?.job) {
+          setJobs((prev) =>
+            prev.map((job) => (job.id === response.job.id ? response.job : job)),
+          );
+        }
         showNotification({
           title: "Scheduler job updated",
           description: "Changes were saved successfully.",
           tone: "success",
         });
       } else {
-        await apiRequest("/api/settings/scheduler/jobs", {
+        const response = await apiRequest("/api/settings/scheduler/jobs", {
           method: "POST",
           body: payload,
         });
+        if (response?.job) {
+          setJobs((prev) => [response.job, ...prev]);
+        }
         showNotification({
           title: "Scheduler job created",
           description: "The job has been added to the queue.",
@@ -274,6 +282,7 @@ export default function SettingsScheduler({ onAuthError }) {
       await apiRequest(`/api/settings/scheduler/jobs/${job.id}`, {
         method: "DELETE",
       });
+      setJobs((prev) => prev.filter((item) => item.id !== job.id));
       await loadScheduler();
       if (editingId === job.id) {
         resetForm();

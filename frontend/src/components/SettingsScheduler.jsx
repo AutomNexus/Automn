@@ -22,6 +22,31 @@ const WEEKDAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 const HTTP_METHOD_OPTIONS = ["POST", "GET", "PUT", "PATCH", "DELETE"];
 
+function parseTimeString(value) {
+  if (typeof value !== "string") return null;
+  const match = value.trim().match(/^(\d{1,2}):(\d{2})$/);
+  if (!match) return null;
+  const hours = Number.parseInt(match[1], 10);
+  const minutes = Number.parseInt(match[2], 10);
+  if (!Number.isFinite(hours) || !Number.isFinite(minutes)) return null;
+  if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59) return null;
+  return { hours, minutes };
+}
+
+function normalizeTimeLabel(value, fallback = "00:00") {
+  const parsed =
+    typeof value === "string"
+      ? parseTimeString(value)
+      : value && typeof value === "object"
+        ? { hours: value.hours, minutes: value.minutes }
+        : null;
+
+  const hours = Number.isFinite(parsed?.hours) ? parsed.hours : Number.parseInt(fallback.slice(0, 2), 10) || 0;
+  const minutes = Number.isFinite(parsed?.minutes) ? parsed.minutes : Number.parseInt(fallback.slice(3, 5), 10) || 0;
+
+  return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
+}
+
 function formatScheduleSummary(job) {
   if (!job?.schedule) return "No schedule";
   const schedule = job.schedule;
@@ -29,9 +54,7 @@ function formatScheduleSummary(job) {
     const dayLabels = (schedule.daysOfWeek || [])
       .map((day) => WEEKDAY_LABELS[day] || day)
       .join(", ");
-    const time = schedule.time
-      ? `${String(schedule.time.hours).padStart(2, "0")}:${String(schedule.time.minutes).padStart(2, "0")}`
-      : "00:00";
+    const time = normalizeTimeLabel(schedule.time, "09:00");
     return `Weekly on ${dayLabels} at ${time}`;
   }
 
@@ -73,10 +96,11 @@ function scheduleToForm(schedule) {
 
 function buildSchedulePayload(form) {
   if (form.mode === "weekly") {
+    const timeValue = normalizeTimeLabel(form.timeOfDay || "09:00", "09:00");
     return {
       mode: "weekly",
       daysOfWeek: form.daysOfWeek || [],
-      time: form.timeOfDay || "09:00",
+      time: timeValue,
     };
   }
 

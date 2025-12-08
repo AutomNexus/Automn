@@ -162,7 +162,11 @@ export default function SettingsScheduler({ onAuthError }) {
   const loadScripts = async () => {
     try {
       const response = await apiRequest("/api/scripts");
-      const items = Array.isArray(response.scripts) ? response.scripts : [];
+      const items = Array.isArray(response)
+        ? response
+        : Array.isArray(response.scripts)
+          ? response.scripts
+          : [];
       setScripts(items);
     } catch (err) {
       handleAuthError(err);

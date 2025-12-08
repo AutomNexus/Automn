@@ -21,6 +21,8 @@ I'd love to keep developing Automn and seeing how strong it can become.
 
 ## Features
 - **Centralised automation hub** – manage script versions, environment variables, collections, permissions, and audit trails from the web UI.
+- **Scripts as API** - Each script automatically creates an API endpoint so other systems are able to interact with your script. Return your own data to those systems!
+- **Scheduling** - Trigger scripts with time based rules.
 - **Remote runner orchestration** – register runners with configurable concurrency/timeouts and stream live execution logs back to the host.
 - **Language-aware execution** – built-in helpers for Node.js, Python, and PowerShell scripts with structured return, log, and notification primitives.
 - **Secure by default** – encrypted variable storage, scrypt hashed credentials, signed session cookies, and shared-secret runner authentication.
@@ -85,6 +87,7 @@ services:
       - ./logs:/app/logs
     environment:
       - NODE_ENV=production
+      - TZ=Australia/Sydney
     restart: unless-stopped
 
   automn-runner:
@@ -102,6 +105,7 @@ services:
       - AUTOMN_RUNNER_ID=default
       - AUTOMN_HOST_URL=http://<Automn Host IP>:8088
       - AUTOMN_RUNNER_PUBLIC_URL=http://<Automn Runner IP>:3030
+      - TZ=Australia/Sydney
 ```
 
 - Browse to the host: http://<Automn Host IP>:8088 and login with user: admin and password: scriptfall (You'll need to update the password)

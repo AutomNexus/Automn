@@ -71,6 +71,7 @@ const ENCRYPTION_TAG_LENGTH = 16;
 const scryptAsync = promisify(crypto.scrypt);
 
 const BANNED_USERNAMES = new Set(["api", "administrator", "system"]);
+const SCHEDULER_USERNAME = "scheduler";
 const DEFAULT_COLLECTION_ID = "category-general";
 const DEFAULT_CATEGORY_ID = DEFAULT_COLLECTION_ID;
 const SUPPORTED_SCRIPT_LANGUAGES = new Set([
@@ -138,6 +139,8 @@ const RUNNER_STATUS = Object.freeze({
 
 const RUNNER_HEALTH_WINDOW_MS = 2 * 60 * 1000;
 const MIN_RUNNER_SECRET_LENGTH = 12;
+const SCHEDULER_ENABLED_SETTING_KEY = "scheduler_enabled";
+const SCHEDULER_POLL_INTERVAL_MS = 30 * 1000;
 
 function resolveFrontendDir() {
   const publicDir = path.join(__dirname, "public");
@@ -1549,6 +1552,474 @@ async function loadNotificationSummary(userId) {
   return summary;
 }
 
+function parseTimeOfDay(value) {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  const match = trimmed.match(/^(\d{1,2}):(\d{2})$/);
+  if (!match) return null;
+  const hours = Number.parseInt(match[1], 10);
+  const minutes = Number.parseInt(match[2], 10);
+  if (!Number.isFinite(hours) || !Number.isFinite(minutes)) return null;
+  if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59) return null;
+  return { hours, minutes };
+}
+
+function applyTimeToDate(baseDate, timeOfDay) {
+  const next = new Date(baseDate.getTime());
+  if (!timeOfDay) return next;
+  next.setHours(timeOfDay.hours, timeOfDay.minutes, 0, 0);
+  return next;
+}
+
+function addIntervalToDate(baseDate, count, unit) {
+  const result = new Date(baseDate.getTime());
+  const normalizedCount = Number.isFinite(count) && count > 0 ? count : 1;
+  switch (unit) {
+    case "hours":
+      result.setHours(result.getHours() + normalizedCount);
+      break;
+    case "days":
+      result.setDate(result.getDate() + normalizedCount);
+      break;
+    case "weeks":
+      result.setDate(result.getDate() + normalizedCount * 7);
+      break;
+    case "months":
+      result.setMonth(result.getMonth() + normalizedCount);
+      break;
+    default:
+      result.setHours(result.getHours() + normalizedCount);
+      break;
+  }
+  return result;
+}
+
+function normalizeScheduleConfig(config) {
+  if (!config || typeof config !== "object") {
+    return null;
+  }
+
+  const mode = config.mode === "weekly" ? "weekly" : "interval";
+
+  if (mode === "weekly") {
+    const days = Array.isArray(config.daysOfWeek)
+      ? config.daysOfWeek
+        .map((value) => Number.parseInt(value, 10))
+        .filter((value) => Number.isInteger(value) && value >= 0 && value <= 6)
+      : [];
+    const uniqueDays = [...new Set(days)].sort((a, b) => a - b);
+    if (!uniqueDays.length) {
+      return null;
+    }
+
+    const time = parseTimeOfDay(config.time) || { hours: 0, minutes: 0 };
+
+    return {
+      mode,
+      daysOfWeek: uniqueDays,
+      time,
+    };
+  }
+
+  const every = Number.parseInt(config.every, 10);
+  const unit = ["hours", "days", "weeks", "months"].includes(config.unit)
+    ? config.unit
+    : "hours";
+  const normalizedEvery = Number.isFinite(every) && every > 0 ? every : 1;
+  const startTime = parseTimeOfDay(config.startTime) || null;
+  const startDate =
+    typeof config.startDate === "string" && config.startDate.trim()
+      ? config.startDate
+      : null;
+
+  return {
+    mode,
+    every: normalizedEvery,
+    unit,
+    startTime,
+    startDate,
+  };
+}
+
+function computeNextRunAt(scheduleConfig, fromDate = new Date()) {
+  if (!scheduleConfig) return null;
+  const base = fromDate instanceof Date ? new Date(fromDate.getTime()) : new Date();
+
+  if (scheduleConfig.mode === "weekly") {
+    const targetTime = scheduleConfig.time || { hours: 0, minutes: 0 };
+    const days = Array.isArray(scheduleConfig.daysOfWeek)
+      ? scheduleConfig.daysOfWeek
+      : [];
+    for (let offset = 0; offset < 14; offset += 1) {
+      const candidate = new Date(base.getTime());
+      candidate.setDate(candidate.getDate() + offset);
+      const withTime = applyTimeToDate(candidate, targetTime);
+      if (days.includes(withTime.getDay()) && withTime > base) {
+        return withTime.toISOString();
+      }
+    }
+    return null;
+  }
+
+  const intervalConfig = { ...scheduleConfig };
+  const intervalBase = intervalConfig.startDate
+    ? new Date(intervalConfig.startDate)
+    : new Date(base.getTime());
+  const anchored = intervalConfig.startTime
+    ? applyTimeToDate(intervalBase, intervalConfig.startTime)
+    : intervalBase;
+
+  let candidate = anchored > base ? anchored : new Date(anchored.getTime());
+  let safety = 0;
+  while (candidate <= base && safety < 500) {
+    candidate = addIntervalToDate(candidate, intervalConfig.every, intervalConfig.unit);
+    safety += 1;
+  }
+
+  return candidate > base ? candidate.toISOString() : null;
+}
+
+function serializeScheduleConfig(config) {
+  try {
+    return JSON.stringify(config || {});
+  } catch (err) {
+    return JSON.stringify({});
+  }
+}
+
+function deserializeScheduleConfig(raw) {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw);
+    return normalizeScheduleConfig(parsed) || parsed || null;
+  } catch (err) {
+    return null;
+  }
+}
+
+function serializeSchedulerPayload(payload) {
+  if (payload === null || payload === undefined) return "";
+  if (typeof payload === "string") return payload;
+  try {
+    return JSON.stringify(payload, null, 2);
+  } catch (err) {
+    return String(payload);
+  }
+}
+
+function resolveSchedulerExecutionPayload(rawPayload) {
+  if (rawPayload === null || rawPayload === undefined) return {};
+  if (typeof rawPayload !== "string") return rawPayload;
+  const trimmed = rawPayload.trim();
+  if (!trimmed) return {};
+  try {
+    return JSON.parse(trimmed);
+  } catch (err) {
+    return trimmed;
+  }
+}
+
+function sanitizeSchedulerJobRow(row) {
+  if (!row) return null;
+  const schedule = deserializeScheduleConfig(row.schedule_config);
+  return {
+    id: row.id,
+    name: row.name || "",
+    scriptId: row.script_id || null,
+    httpMethod: row.http_method || "POST",
+    payload: row.payload || "",
+    schedule,
+    isEnabled: normalizeDbBoolean(row.is_enabled),
+    lastRunAt: row.last_run_at || null,
+    nextRunAt: row.next_run_at || null,
+    createdAt: row.created_at || null,
+    updatedAt: row.updated_at || null,
+  };
+}
+
+let schedulerUserCache = null;
+const schedulerState = {
+  enabled: true,
+  running: false,
+  timer: null,
+};
+
+async function loadSchedulerUser() {
+  if (schedulerUserCache?.id) return schedulerUserCache;
+  try {
+    const row = await dbGet(
+      `SELECT id, username, is_admin, is_active, must_change_password, created_at, last_login, is_system
+         FROM users
+        WHERE username=? AND deleted_at IS NULL`,
+      [SCHEDULER_USERNAME],
+    );
+    schedulerUserCache = row ? sanitizeUserRow(row) : null;
+    return schedulerUserCache;
+  } catch (err) {
+    console.error("Failed to load scheduler user", err);
+    return null;
+  }
+}
+
+async function ensureSchedulerUser() {
+  try {
+    if (typeof db.ensureSchedulerAccount === "function") {
+      await db.ensureSchedulerAccount();
+    }
+  } catch (err) {
+    console.error("Failed to ensure scheduler account", err);
+  }
+  schedulerUserCache = null;
+  return loadSchedulerUser();
+}
+
+async function setSchedulerEnabled(enabled) {
+  schedulerState.enabled = Boolean(enabled);
+  await writeSystemSetting(
+    SCHEDULER_ENABLED_SETTING_KEY,
+    schedulerState.enabled ? "1" : "0",
+  );
+  if (schedulerState.enabled) {
+    startSchedulerService();
+  } else {
+    stopSchedulerService();
+  }
+}
+
+function scheduleSchedulerTick(delayMs = SCHEDULER_POLL_INTERVAL_MS) {
+  if (!schedulerState.running) return;
+  if (schedulerState.timer) {
+    clearTimeout(schedulerState.timer);
+  }
+  schedulerState.timer = setTimeout(runSchedulerCycle, delayMs);
+  if (typeof schedulerState.timer?.unref === "function") {
+    schedulerState.timer.unref();
+  }
+}
+
+async function computeNextRunForJob(jobRow) {
+  const scheduleConfig = jobRow.schedule_config
+    ? deserializeScheduleConfig(jobRow.schedule_config)
+    : normalizeScheduleConfig(jobRow.schedule || {});
+  if (!scheduleConfig) return null;
+  const anchor = jobRow.next_run_at || jobRow.updated_at || jobRow.created_at || new Date().toISOString();
+  return computeNextRunAt(scheduleConfig, new Date(anchor));
+}
+
+async function updateNextRun(jobId, scheduleConfig) {
+  if (!jobId) return null;
+  const nextRun = computeNextRunAt(scheduleConfig, new Date());
+  await dbRun(
+    `UPDATE scheduler_jobs SET next_run_at=?, updated_at=CURRENT_TIMESTAMP WHERE id=?`,
+    [nextRun, jobId],
+  );
+  return nextRun;
+}
+
+async function dispatchSchedulerJob(jobRow, { testRun = false } = {}) {
+  const schedulerUser = (await loadSchedulerUser()) || (await ensureSchedulerUser());
+  if (!schedulerUser || !schedulerUser.isActive) {
+    console.error("Scheduler user is unavailable; skipping scheduled job.");
+    return null;
+  }
+
+  const schedule = deserializeScheduleConfig(jobRow.schedule_config);
+  const scriptId = jobRow.script_id;
+  if (!scriptId) {
+    console.warn(`Scheduled job ${jobRow.id} is missing a script reference.`);
+    return null;
+  }
+
+  let script;
+  try {
+    const access = await ensureScriptAccess({
+      scriptId,
+      user: schedulerUser,
+      requiredPermission: "run",
+    });
+    script = access?.script;
+  } catch (err) {
+    console.error(`Scheduled job ${jobRow.id} could not load script`, err);
+    return null;
+  }
+
+  if (!script) {
+    console.error(`Scheduled job ${jobRow.id} script is unavailable.`);
+    return null;
+  }
+
+  const httpMethod =
+    typeof jobRow.http_method === "string" && jobRow.http_method.trim()
+      ? jobRow.http_method.trim().toUpperCase()
+      : script.run_method || "POST";
+
+  const runId = uuidv4();
+  const input = resolveSchedulerExecutionPayload(jobRow.payload);
+  const jobContext = {
+    userId: schedulerUser.id,
+    username: schedulerUser.username,
+    requestId: `scheduler-${jobRow.id}-${runId}`,
+    requestUrl: null,
+    requestHeaders: {},
+    requestIp: null,
+    schedulerJobId: jobRow.id,
+    schedulerMode: schedule?.mode || "interval",
+    schedulerTestRun: testRun,
+  };
+
+  let runTracker = null;
+  const triggeredByLabel = "Scheduler";
+
+  try {
+    const codeVersion = await determineCodeVersionForScript(script.id);
+    runTracker = await createRunTracker({
+      runId,
+      script,
+      triggeredBy: triggeredByLabel,
+      triggeredByUserId: schedulerUser.id,
+      input,
+      httpMethod,
+      codeVersion,
+    });
+
+    await ensureHealthyRunnerAvailability(script);
+
+    const executionVariables = await loadScriptVariablesForExecution(script);
+    const jobPromise = runJob(
+      {
+        ...script,
+        preassignedRunId: runId,
+        triggeredBy: triggeredByLabel,
+        triggeredByUserId: schedulerUser.id,
+        variables: executionVariables,
+        jobContext,
+      },
+      input,
+    );
+
+    jobPromise
+      .then(async (result) => {
+        if (runTracker) {
+          try {
+            await runTracker.complete(result);
+          } catch (trackerErr) {
+            console.error(`Failed to persist scheduler run ${runId} result`, trackerErr);
+          }
+        }
+        await persistScriptNotifications(script, result);
+      })
+      .catch(async (err) => {
+        const failureError = normalizeRunFailureError(err);
+        if (runTracker) {
+          try {
+            await runTracker.fail(failureError);
+          } catch (trackerErr) {
+            console.error(`Failed to persist scheduler run ${runId} failure`, trackerErr);
+          }
+        }
+        console.error(`Scheduled job ${jobRow.id} failed`, err);
+      });
+
+    return { runId };
+  } catch (err) {
+    const failureError = normalizeRunFailureError(err);
+    if (runTracker) {
+      try {
+        await runTracker.fail(failureError);
+      } catch (trackerErr) {
+        console.error(`Failed to persist scheduler run ${runId} failure`, trackerErr);
+      }
+    }
+    console.error(`Scheduled job ${jobRow.id} failed to start`, err);
+    return null;
+  }
+}
+
+async function processDueSchedulerJobs() {
+  if (!schedulerState.enabled) return;
+  const nowIso = new Date().toISOString();
+  let dueJobs = [];
+  try {
+    dueJobs = await dbAll(
+      `SELECT * FROM scheduler_jobs
+         WHERE is_enabled=1 AND next_run_at IS NOT NULL AND next_run_at<=?
+         ORDER BY next_run_at ASC
+         LIMIT 20`,
+      [nowIso],
+    );
+  } catch (err) {
+    console.error("Failed to load due scheduler jobs", err);
+    return;
+  }
+
+  if (!Array.isArray(dueJobs) || !dueJobs.length) {
+    return;
+  }
+
+  for (const jobRow of dueJobs) {
+    const scheduleConfig = deserializeScheduleConfig(jobRow.schedule_config);
+    const nextRun = computeNextRunAt(scheduleConfig, new Date(jobRow.next_run_at || nowIso));
+    const lastRunAt = new Date().toISOString();
+    const dispatchResult = await dispatchSchedulerJob(jobRow);
+
+    if (dispatchResult) {
+      await dbRun(
+        `UPDATE scheduler_jobs SET last_run_at=?, next_run_at=?, updated_at=CURRENT_TIMESTAMP WHERE id=?`,
+        [lastRunAt, nextRun, jobRow.id],
+      );
+    } else {
+      console.warn(
+        `Scheduled job ${jobRow.id} dispatch failed; retrying after cooldown.`,
+      );
+      const retryAt = new Date(
+        Date.now() + Math.max(SCHEDULER_POLL_INTERVAL_MS, 5000),
+      ).toISOString();
+      await dbRun(
+        `UPDATE scheduler_jobs SET next_run_at=?, updated_at=CURRENT_TIMESTAMP WHERE id=?`,
+        [retryAt, jobRow.id],
+      );
+    }
+  }
+}
+
+async function runSchedulerCycle() {
+  if (!schedulerState.running) return;
+  try {
+    await processDueSchedulerJobs();
+  } catch (err) {
+    console.error("Scheduler cycle failed", err);
+  } finally {
+    scheduleSchedulerTick();
+  }
+}
+
+async function startSchedulerService() {
+  if (schedulerState.running) return;
+  schedulerState.running = true;
+  if (!schedulerState.enabled) {
+    schedulerState.enabled = true;
+  }
+  scheduleSchedulerTick(2000);
+}
+
+function stopSchedulerService() {
+  schedulerState.running = false;
+  if (schedulerState.timer) {
+    clearTimeout(schedulerState.timer);
+    schedulerState.timer = null;
+  }
+}
+
+async function initializeSchedulerState() {
+  const stored = await readSystemSetting(SCHEDULER_ENABLED_SETTING_KEY, "1");
+  schedulerState.enabled = stored !== "0" && stored !== "false";
+  await ensureSchedulerUser();
+  if (schedulerState.enabled) {
+    startSchedulerService();
+  }
+}
+
 function sanitizeVariableApiRow(
   row,
   { envPrefix = SCRIPT_VARIABLE_ENV_PREFIX, scope = "script" } = {},
@@ -2016,6 +2487,7 @@ function sanitizeUserRow(row) {
     username: row.username,
     isAdmin: normalizeDbBoolean(row.is_admin),
     isActive: normalizeDbBoolean(row.is_active),
+    isSystem: normalizeDbBoolean(row.is_system),
     mustChangePassword: normalizeDbBoolean(row.must_change_password),
     createdAt: row.created_at || null,
     lastLogin: row.last_login || null,
@@ -2031,7 +2503,7 @@ async function loadUserById(userId) {
   if (!userId) return null;
   try {
     const row = await dbGet(
-      `SELECT id, username, is_admin, is_active, must_change_password, created_at, last_login
+      `SELECT id, username, is_admin, is_active, must_change_password, created_at, last_login, is_system
          FROM users
         WHERE id=? AND deleted_at IS NULL`,
       [userId],
@@ -2068,6 +2540,38 @@ function dbAll(sql, params = []) {
       else resolve(rows);
     });
   });
+}
+
+async function readSystemSetting(key, fallback = null) {
+  if (!key) return fallback;
+  try {
+    const row = await dbGet(
+      `SELECT value FROM system_settings WHERE key=?`,
+      [key],
+    );
+    if (!row) return fallback;
+    return row.value !== undefined && row.value !== null ? row.value : fallback;
+  } catch (err) {
+    console.error(`Failed to read system setting ${key}`, err);
+    return fallback;
+  }
+}
+
+async function writeSystemSetting(key, value) {
+  if (!key) return false;
+  const timestamp = new Date().toISOString();
+  try {
+    await dbRun(
+      `INSERT INTO system_settings (key, value, updated_at)
+       VALUES (?, ?, ?)
+       ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at`,
+      [key, value, timestamp],
+    );
+    return true;
+  } catch (err) {
+    console.error(`Failed to write system setting ${key}`, err);
+    return false;
+  }
 }
 
 function normalizePackageName(value) {
@@ -3365,9 +3869,9 @@ app.post("/api/preferences", requireAuthenticated, async (req, res) => {
 app.get("/api/users", requireAdmin, async (req, res) => {
   try {
     const rows = await dbAll(
-      `SELECT id, username, is_admin, is_active, must_change_password, created_at, last_login
+      `SELECT id, username, is_admin, is_active, must_change_password, created_at, last_login, is_system
          FROM users
-        WHERE deleted_at IS NULL
+        WHERE deleted_at IS NULL AND is_system=0
         ORDER BY username COLLATE NOCASE ASC`,
     );
     res.json({ users: rows.map(sanitizeUserRow).filter(Boolean) });
@@ -3471,7 +3975,7 @@ app.patch("/api/users/:id", requireAdmin, async (req, res) => {
 
   try {
     const existing = await dbGet(
-      `SELECT id, username, is_admin, is_active, must_change_password
+      `SELECT id, username, is_admin, is_active, must_change_password, is_system
          FROM users
         WHERE id=? AND deleted_at IS NULL`,
       [targetId],
@@ -3479,6 +3983,11 @@ app.patch("/api/users/:id", requireAdmin, async (req, res) => {
 
     if (!existing) {
       res.status(404).json({ error: "User not found" });
+      return;
+    }
+
+    if (normalizeDbBoolean(existing.is_system)) {
+      res.status(400).json({ error: "System accounts cannot be modified" });
       return;
     }
 
@@ -3617,7 +4126,7 @@ app.delete("/api/users/:id", requireAdmin, async (req, res) => {
 
   try {
     const existing = await dbGet(
-      `SELECT id, username, is_admin, is_active FROM users WHERE id=? AND deleted_at IS NULL`,
+      `SELECT id, username, is_admin, is_active, is_system FROM users WHERE id=? AND deleted_at IS NULL`,
       [targetId],
     );
 
@@ -3638,9 +4147,14 @@ app.delete("/api/users/:id", requireAdmin, async (req, res) => {
       );
       const adminCount = Number(countRow?.count ?? 0);
       if (!Number.isFinite(adminCount) || adminCount <= 0) {
-        res.status(400).json({ error: "Cannot remove the only administrator" });
-        return;
-      }
+      res.status(400).json({ error: "Cannot remove the only administrator" });
+      return;
+    }
+
+    if (normalizeDbBoolean(existing.is_system)) {
+      res.status(400).json({ error: "System accounts cannot be deleted" });
+      return;
+    }
     }
 
     if (existing.is_active) {
@@ -4090,6 +4604,242 @@ app.delete("/api/settings/runner-hosts/:id", requireAdmin, async (req, res) => {
 
   unregisterRunnerHost(hostId);
   res.json({ runnerHost: sanitizeRunnerHost(existing), deleted: true });
+});
+
+app.get("/api/settings/scheduler", requireAdmin, async (req, res) => {
+  try {
+    const rows = await dbAll(
+      `SELECT * FROM scheduler_jobs ORDER BY created_at DESC, name COLLATE NOCASE ASC`,
+    );
+    const jobs = Array.isArray(rows)
+      ? rows.map((row) => sanitizeSchedulerJobRow(row)).filter(Boolean)
+      : [];
+    res.json({ enabled: schedulerState.enabled, running: schedulerState.running, jobs });
+  } catch (err) {
+    console.error("Failed to load scheduler jobs", err);
+    res.status(500).json({ error: "Failed to load scheduler jobs" });
+  }
+});
+
+app.post("/api/settings/scheduler/state", requireAdmin, async (req, res) => {
+  const enabled = normalizeDbBoolean(req.body?.enabled ?? req.body?.isEnabled ?? true);
+  try {
+    await setSchedulerEnabled(enabled);
+    res.json({ enabled: schedulerState.enabled, running: schedulerState.running });
+  } catch (err) {
+    console.error("Failed to update scheduler state", err);
+    res.status(500).json({ error: "Failed to update scheduler state" });
+  }
+});
+
+app.post("/api/settings/scheduler/jobs", requireAdmin, async (req, res) => {
+  const { name, scriptId, httpMethod, payload, schedule, isEnabled } = req.body || {};
+  const normalizedScriptId = typeof scriptId === "string" ? scriptId.trim() : "";
+  if (!normalizedScriptId) {
+    res.status(400).json({ error: "Script is required" });
+    return;
+  }
+
+  const normalizedSchedule = normalizeScheduleConfig(schedule);
+  if (!normalizedSchedule) {
+    res.status(400).json({ error: "A valid schedule is required" });
+    return;
+  }
+
+  const normalizedMethod =
+    typeof httpMethod === "string" && SUPPORTED_HTTP_METHODS.includes(httpMethod.trim().toUpperCase())
+      ? httpMethod.trim().toUpperCase()
+      : "POST";
+
+  const jobName = typeof name === "string" ? name.trim() : "";
+  const jobId = uuidv4();
+  const nextRunAt = computeNextRunAt(normalizedSchedule, new Date());
+  const createdAt = new Date().toISOString();
+
+  try {
+    await ensureScriptAccess({ scriptId: normalizedScriptId, user: req.user, requiredPermission: "run" });
+    await dbRun(
+      `INSERT INTO scheduler_jobs (id, name, script_id, http_method, payload, schedule_config, is_enabled, next_run_at, created_at, updated_at, created_by_user_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        jobId,
+        jobName || null,
+        normalizedScriptId,
+        normalizedMethod,
+        serializeSchedulerPayload(payload),
+        serializeScheduleConfig(normalizedSchedule),
+        normalizeDbBoolean(isEnabled) ? 1 : 0,
+        nextRunAt,
+        createdAt,
+        createdAt,
+        req.user.id,
+      ],
+    );
+
+    const createdRow = await dbGet("SELECT * FROM scheduler_jobs WHERE id=?", [jobId]);
+    scheduleSchedulerTick(500);
+    res.status(201).json({ job: sanitizeSchedulerJobRow(createdRow) });
+  } catch (err) {
+    console.error("Failed to create scheduler job", err);
+    res.status(500).json({ error: "Failed to create scheduler job" });
+  }
+});
+
+app.patch("/api/settings/scheduler/jobs/:id", requireAdmin, async (req, res) => {
+  const jobId = typeof req.params.id === "string" ? req.params.id.trim() : "";
+  if (!jobId) {
+    res.status(400).json({ error: "Job id is required" });
+    return;
+  }
+
+  const existing = await dbGet("SELECT * FROM scheduler_jobs WHERE id=?", [jobId]);
+  if (!existing) {
+    res.status(404).json({ error: "Job not found" });
+    return;
+  }
+
+  const { name, scriptId, httpMethod, payload, schedule, isEnabled } = req.body || {};
+
+  const updates = [];
+  const params = [];
+  let normalizedSchedule = null;
+  let shouldRefreshNextRun = false;
+
+  if (typeof name === "string") {
+    updates.push("name=?");
+    params.push(name.trim());
+  }
+
+  if (typeof httpMethod === "string") {
+    const normalizedMethod = httpMethod.trim().toUpperCase();
+    if (!SUPPORTED_HTTP_METHODS.includes(normalizedMethod)) {
+      res.status(400).json({ error: "Unsupported HTTP method" });
+      return;
+    }
+    updates.push("http_method=?");
+    params.push(normalizedMethod);
+  }
+
+  if (payload !== undefined) {
+    updates.push("payload=?");
+    params.push(serializeSchedulerPayload(payload));
+  }
+
+  if (schedule !== undefined) {
+    normalizedSchedule = normalizeScheduleConfig(schedule);
+    if (!normalizedSchedule) {
+      res.status(400).json({ error: "A valid schedule is required" });
+      return;
+    }
+    updates.push("schedule_config=?");
+    params.push(serializeScheduleConfig(normalizedSchedule));
+    shouldRefreshNextRun = true;
+  }
+
+  if (typeof isEnabled === "boolean") {
+    updates.push("is_enabled=?");
+    params.push(isEnabled ? 1 : 0);
+    shouldRefreshNextRun = shouldRefreshNextRun || isEnabled;
+  }
+
+  const normalizedScriptId = typeof scriptId === "string" ? scriptId.trim() : existing.script_id;
+  if (scriptId !== undefined) {
+    if (!normalizedScriptId) {
+      res.status(400).json({ error: "Script is required" });
+      return;
+    }
+    try {
+      await ensureScriptAccess({ scriptId: normalizedScriptId, user: req.user, requiredPermission: "run" });
+    } catch (err) {
+      console.error("Scheduler job script validation failed", err);
+      res.status(400).json({ error: "Script could not be loaded" });
+      return;
+    }
+    updates.push("script_id=?");
+    params.push(normalizedScriptId);
+  }
+
+  if (!updates.length) {
+    res.json({ job: sanitizeSchedulerJobRow(existing) });
+    return;
+  }
+
+  let nextRunValue = existing.next_run_at;
+  const scheduleForNextRun = normalizedSchedule || deserializeScheduleConfig(existing.schedule_config);
+  if (shouldRefreshNextRun) {
+    nextRunValue = computeNextRunAt(scheduleForNextRun, new Date());
+    updates.push("next_run_at=?");
+    params.push(nextRunValue);
+  }
+
+  updates.push("updated_at=CURRENT_TIMESTAMP");
+  params.push(jobId);
+
+  try {
+    await dbRun(`UPDATE scheduler_jobs SET ${updates.join(", ")} WHERE id=?`, params);
+    const updated = await dbGet("SELECT * FROM scheduler_jobs WHERE id=?", [jobId]);
+    scheduleSchedulerTick(500);
+    res.json({ job: sanitizeSchedulerJobRow(updated) });
+  } catch (err) {
+    console.error("Failed to update scheduler job", err);
+    res.status(500).json({ error: "Failed to update scheduler job" });
+  }
+});
+
+app.post("/api/settings/scheduler/jobs/:id/test", requireAdmin, async (req, res) => {
+  const jobId = typeof req.params.id === "string" ? req.params.id.trim() : "";
+  if (!jobId) {
+    res.status(400).json({ error: "Job id is required" });
+    return;
+  }
+
+  const jobRow = await dbGet("SELECT * FROM scheduler_jobs WHERE id=?", [jobId]);
+  if (!jobRow) {
+    res.status(404).json({ error: "Job not found" });
+    return;
+  }
+
+  try {
+    await ensureScriptAccess({ scriptId: jobRow.script_id, user: req.user, requiredPermission: "run" });
+  } catch (err) {
+    res.status(403).json({ error: "You do not have access to this script" });
+    return;
+  }
+
+  try {
+    const startedAt = new Date().toISOString();
+    const result = await dispatchSchedulerJob(jobRow, { testRun: true });
+    await dbRun(
+      `UPDATE scheduler_jobs SET last_run_at=?, updated_at=CURRENT_TIMESTAMP WHERE id=?`,
+      [startedAt, jobId],
+    );
+    res.json({ success: true, runId: result?.runId || null });
+  } catch (err) {
+    console.error("Failed to start test run", err);
+    res.status(500).json({ error: "Failed to start test run" });
+  }
+});
+
+app.delete("/api/settings/scheduler/jobs/:id", requireAdmin, async (req, res) => {
+  const jobId = typeof req.params.id === "string" ? req.params.id.trim() : "";
+  if (!jobId) {
+    res.status(400).json({ error: "Job id is required" });
+    return;
+  }
+
+  const existing = await dbGet("SELECT id FROM scheduler_jobs WHERE id=?", [jobId]);
+  if (!existing) {
+    res.status(404).json({ error: "Job not found" });
+    return;
+  }
+
+  try {
+    await dbRun("DELETE FROM scheduler_jobs WHERE id=?", [jobId]);
+    res.json({ deleted: true });
+  } catch (err) {
+    console.error("Failed to delete scheduler job", err);
+    res.status(500).json({ error: "Failed to delete scheduler job" });
+  }
 });
 
 app.get("/api/settings/global-variables", requireAdmin, async (req, res) => {
@@ -8246,6 +8996,8 @@ async function startServer() {
     console.error("Database not ready", err);
     process.exit(1);
   }
+
+  await initializeSchedulerState();
 
   const server = app.listen(PORT, () =>
     console.log(`🍂 Automn running on http://localhost:${PORT}`)

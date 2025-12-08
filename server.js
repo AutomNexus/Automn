@@ -1955,11 +1955,25 @@ async function processDueSchedulerJobs() {
     const scheduleConfig = deserializeScheduleConfig(jobRow.schedule_config);
     const nextRun = computeNextRunAt(scheduleConfig, new Date(jobRow.next_run_at || nowIso));
     const lastRunAt = new Date().toISOString();
-    await dispatchSchedulerJob(jobRow);
-    await dbRun(
-      `UPDATE scheduler_jobs SET last_run_at=?, next_run_at=?, updated_at=CURRENT_TIMESTAMP WHERE id=?`,
-      [lastRunAt, nextRun, jobRow.id],
-    );
+    const dispatchResult = await dispatchSchedulerJob(jobRow);
+
+    if (dispatchResult) {
+      await dbRun(
+        `UPDATE scheduler_jobs SET last_run_at=?, next_run_at=?, updated_at=CURRENT_TIMESTAMP WHERE id=?`,
+        [lastRunAt, nextRun, jobRow.id],
+      );
+    } else {
+      console.warn(
+        `Scheduled job ${jobRow.id} dispatch failed; retrying after cooldown.`,
+      );
+      const retryAt = new Date(
+        Date.now() + Math.max(SCHEDULER_POLL_INTERVAL_MS, 5000),
+      ).toISOString();
+      await dbRun(
+        `UPDATE scheduler_jobs SET next_run_at=?, updated_at=CURRENT_TIMESTAMP WHERE id=?`,
+        [retryAt, jobRow.id],
+      );
+    }
   }
 }
 

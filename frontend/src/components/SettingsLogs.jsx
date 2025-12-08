@@ -1,6 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { apiRequest } from "../utils/api";
 
+const INPUT_CLASSES =
+  "w-full rounded-lg border border-[color:var(--color-input-border)] bg-[color:var(--color-input-bg)] px-3 py-2 text-sm text-[color:var(--color-input-text)] placeholder:text-[color:var(--color-input-placeholder)] transition focus:border-[color:var(--color-accent)] focus:outline-none focus:ring-1 focus:ring-[color:var(--color-accent)]";
+const PANEL_CLASSES =
+  "rounded border border-[color:var(--color-panel-border)] bg-[color:var(--color-surface-2)] shadow-sm";
+const SECTION_HEADING_CLASSES = "text-lg font-semibold text-[color:var(--color-text-strong)]";
+const SECTION_SUBTITLE_CLASSES = "text-sm text-[color:var(--color-text-muted)]";
+
 const RESULT_OPTIONS = [
   { value: "", label: "All results" },
   { value: "success", label: "Success" },
@@ -61,10 +68,10 @@ function getMethodBadgeTone(method) {
 }
 
 function TagBadge({ children }) {
-  if (!children) return <span className="text-slate-400">None</span>;
+  if (!children) return <span className="text-[color:var(--color-text-muted)]">None</span>;
   return (
-    <span className="inline-flex items-center gap-1 rounded-full border border-slate-300 bg-slate-100 px-2 py-1 text-[11px] font-medium uppercase tracking-wide text-slate-700 dark:border-slate-600 dark:bg-slate-700/60 dark:text-slate-100">
-      <span className="h-2 w-2 rounded-full bg-slate-500 dark:bg-slate-300" />
+    <span className="inline-flex items-center gap-1 rounded-full border border-[color:var(--color-panel-border)] bg-[color:var(--color-badge-muted-bg)] px-2 py-1 text-[11px] font-medium uppercase tracking-wide text-[color:var(--color-badge-muted-text)]">
+      <span className="h-2 w-2 rounded-full bg-[color:var(--color-text-muted)]" />
       {children}
     </span>
   );
@@ -81,10 +88,10 @@ function StatusBadge({ status }) {
 }
 
 function RequestBadge({ method, fallback }) {
-  if (!method && !fallback) return <span className="text-slate-400">Unknown</span>;
+  if (!method && !fallback) return <span className="text-[color:var(--color-text-muted)]">Unknown</span>;
   if (!method) {
     return (
-      <span className="inline-flex items-center rounded-full border border-slate-300 bg-slate-100 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-slate-700 dark:border-slate-500 dark:bg-slate-600/40 dark:text-slate-100">
+      <span className="inline-flex items-center rounded-full border border-[color:var(--color-panel-border)] bg-[color:var(--color-badge-muted-bg)] px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-[color:var(--color-text-strong)]">
         {fallback}
       </span>
     );
@@ -263,19 +270,19 @@ export default function SettingsLogs({ onAuthError }) {
   return (
     <div className="flex h-full flex-col gap-6">
       <div className="space-y-2">
-        <h3 className="text-lg font-semibold text-slate-100">Consolidated Logs</h3>
-        <p className="text-sm text-slate-400">
+        <h3 className={SECTION_HEADING_CLASSES}>Consolidated Logs</h3>
+        <p className={SECTION_SUBTITLE_CLASSES}>
           Review recent activity across the scripts you can access. Filter by collection, script, runner, HTTP method,
           result, or error tag, and search within log summaries.
         </p>
       </div>
 
-      <div className="rounded border border-slate-800 bg-slate-900/40 p-4 shadow-sm">
+      <div className={`${PANEL_CLASSES} p-4`}>
         <div className="grid grid-cols-1 gap-3 md:grid-cols-3 lg:grid-cols-7">
-          <label className="space-y-1 text-sm text-slate-200">
-            <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Collection</span>
+          <label className="space-y-1 text-sm text-[color:var(--color-text-strong)]">
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-[color:var(--color-text-muted)]">Collection</span>
             <select
-              className="w-full rounded-lg border border-slate-800 bg-slate-950/60 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 transition focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+              className={INPUT_CLASSES}
               value={filters.collectionId}
               onChange={(event) => handleFilterChange("collectionId", event.target.value)}
             >
@@ -287,10 +294,10 @@ export default function SettingsLogs({ onAuthError }) {
             </select>
           </label>
 
-          <label className="space-y-1 text-sm text-slate-200">
-            <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Runner</span>
+          <label className="space-y-1 text-sm text-[color:var(--color-text-strong)]">
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-[color:var(--color-text-muted)]">Runner</span>
             <select
-              className="w-full rounded-lg border border-slate-800 bg-slate-950/60 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 transition focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+              className={INPUT_CLASSES}
               value={filters.runnerHostId}
               onChange={(event) => handleFilterChange("runnerHostId", event.target.value)}
             >
@@ -302,10 +309,10 @@ export default function SettingsLogs({ onAuthError }) {
             </select>
           </label>
 
-          <label className="space-y-1 text-sm text-slate-200">
-            <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Script</span>
+          <label className="space-y-1 text-sm text-[color:var(--color-text-strong)]">
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-[color:var(--color-text-muted)]">Script</span>
             <select
-              className="w-full rounded-lg border border-slate-800 bg-slate-950/60 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 transition focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+              className={INPUT_CLASSES}
               value={filters.scriptId}
               onChange={(event) => handleFilterChange("scriptId", event.target.value)}
             >
@@ -317,10 +324,10 @@ export default function SettingsLogs({ onAuthError }) {
             </select>
           </label>
 
-          <label className="space-y-1 text-sm text-slate-200">
-            <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Result</span>
+          <label className="space-y-1 text-sm text-[color:var(--color-text-strong)]">
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-[color:var(--color-text-muted)]">Result</span>
             <select
-              className="w-full rounded-lg border border-slate-800 bg-slate-950/60 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 transition focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+              className={INPUT_CLASSES}
               value={filters.result}
               onChange={(event) => handleFilterChange("result", event.target.value)}
             >
@@ -332,10 +339,10 @@ export default function SettingsLogs({ onAuthError }) {
             </select>
           </label>
 
-          <label className="space-y-1 text-sm text-slate-200">
-            <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">HTTP Type</span>
+          <label className="space-y-1 text-sm text-[color:var(--color-text-strong)]">
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-[color:var(--color-text-muted)]">HTTP Type</span>
             <select
-              className="w-full rounded-lg border border-slate-800 bg-slate-950/60 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 transition focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+              className={INPUT_CLASSES}
               value={filters.httpType}
               onChange={(event) => handleFilterChange("httpType", event.target.value)}
             >
@@ -347,10 +354,10 @@ export default function SettingsLogs({ onAuthError }) {
             </select>
           </label>
 
-          <label className="space-y-1 text-sm text-slate-200">
-            <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Error Tag</span>
+          <label className="space-y-1 text-sm text-[color:var(--color-text-strong)]">
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-[color:var(--color-text-muted)]">Error Tag</span>
             <select
-              className="w-full rounded-lg border border-slate-800 bg-slate-950/60 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 transition focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+              className={INPUT_CLASSES}
               value={filters.errorTag}
               onChange={(event) => handleFilterChange("errorTag", event.target.value)}
             >
@@ -362,12 +369,12 @@ export default function SettingsLogs({ onAuthError }) {
             </select>
           </label>
 
-          <label className="space-y-1 text-sm text-slate-200">
-            <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Search</span>
+          <label className="space-y-1 text-sm text-[color:var(--color-text-strong)]">
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-[color:var(--color-text-muted)]">Search</span>
             <input
               type="search"
               placeholder="Search logs, scripts, tags"
-              className="w-full rounded-lg border border-slate-800 bg-slate-950/60 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 transition focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+              className={INPUT_CLASSES}
               value={filters.search}
               onChange={(event) => handleFilterChange("search", event.target.value)}
             />
@@ -375,16 +382,16 @@ export default function SettingsLogs({ onAuthError }) {
         </div>
       </div>
 
-      <div className="flex-1 space-y-3 rounded border border-slate-800 bg-slate-900/40 p-4 shadow-sm">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 pb-3">
+      <div className={`${PANEL_CLASSES} flex-1 space-y-3 p-4`}>
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[color:var(--color-panel-border)] pb-3">
           <div className="space-y-0.5">
-            <h4 className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-400">Log Events</h4>
-            <p className="text-sm text-slate-300">
+            <h4 className="text-xs font-semibold uppercase tracking-[0.08em] text-[color:var(--color-text-muted)]">Log Events</h4>
+            <p className="text-sm text-[color:var(--color-text-strong)]">
               Showing {events.length} entr{events.length === 1 ? "y" : "ies"} matching your filters.
             </p>
           </div>
           <button
-            className="rounded border border-slate-700 bg-slate-950/60 px-4 py-2 text-sm font-semibold text-slate-100 transition hover:border-sky-500 hover:text-sky-200 disabled:cursor-not-allowed disabled:opacity-60"
+            className="rounded border border-[color:var(--color-panel-border)] bg-[color:var(--color-input-bg)] px-4 py-2 text-sm font-semibold text-[color:var(--color-text-strong)] transition hover:border-[color:var(--color-accent)] hover:text-[color:var(--color-accent)] disabled:cursor-not-allowed disabled:opacity-60"
             type="button"
             onClick={loadEvents}
             disabled={isLoading}
@@ -394,14 +401,14 @@ export default function SettingsLogs({ onAuthError }) {
         </div>
 
         {error && (
-          <div className="rounded border border-rose-800/60 bg-rose-900/30 px-4 py-3 text-sm text-rose-100">
+          <div className="rounded border border-[color:var(--color-action-danger-border)] bg-[color:var(--color-action-danger-bg)] px-4 py-3 text-sm text-[color:var(--color-action-danger-text)]">
             {error}
           </div>
         )}
 
-        <div className="overflow-hidden rounded border border-slate-800">
-          <table className="min-w-[760px] w-full divide-y divide-slate-800 text-sm">
-            <thead className="bg-slate-900/60 text-xs uppercase tracking-wide text-slate-400">
+        <div className="overflow-hidden rounded border border-[color:var(--color-panel-border)]">
+          <table className="min-w-[760px] w-full divide-y divide-[color:var(--color-divider)] text-sm text-[color:var(--color-text-strong)]">
+            <thead className="bg-[color:var(--color-surface-2)] text-xs uppercase tracking-wide text-[color:var(--color-text-muted)]">
               <tr>
                 <th className="px-4 py-2 text-left">Datetime</th>
                 <th className="px-4 py-2 text-left">Script</th>
@@ -411,17 +418,17 @@ export default function SettingsLogs({ onAuthError }) {
                 <th className="px-4 py-2 text-left">Error Tag</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-800 bg-slate-900/30 text-slate-200">
+            <tbody className="divide-y divide-[color:var(--color-divider)] bg-[color:var(--color-surface-1)] text-[color:var(--color-text-strong)]">
               {isLoading && (
                 <tr>
-                  <td className="px-4 py-6 text-center text-sm text-slate-400" colSpan={6}>
+                  <td className="px-4 py-6 text-center text-sm text-[color:var(--color-text-muted)]" colSpan={6}>
                     Loading logs...
                   </td>
                 </tr>
               )}
               {!isLoading && events.length === 0 && (
                 <tr>
-                  <td className="px-4 py-6 text-center text-sm text-slate-400" colSpan={6}>
+                  <td className="px-4 py-6 text-center text-sm text-[color:var(--color-text-muted)]" colSpan={6}>
                     No log events match your filters yet.
                   </td>
                 </tr>
@@ -431,13 +438,13 @@ export default function SettingsLogs({ onAuthError }) {
                   <tr
                     key={event.runId}
                     onClick={() => setSelectedEvent(event)}
-                    className="cursor-pointer transition hover:bg-slate-800/60"
+                    className="cursor-pointer transition hover:bg-[color:var(--color-surface-3)]"
                   >
                     <td className="px-4 py-3">
-                      <div className="space-y-1 text-slate-200">
+                      <div className="space-y-1 text-[color:var(--color-text-strong)]">
                         <div className="font-semibold">{formatDateTime(event.timestamp)}</div>
                         {event.message ? (
-                          <div className="line-clamp-1 text-xs text-slate-400" title={event.message}>
+                          <div className="line-clamp-1 text-xs text-[color:var(--color-text-muted)]" title={event.message}>
                             {event.message}
                           </div>
                         ) : null}
@@ -445,17 +452,17 @@ export default function SettingsLogs({ onAuthError }) {
                     </td>
                     <td className="px-4 py-3">
                       <div className="space-y-1">
-                        <div className="font-semibold text-slate-100">{event.scriptName}</div>
-                        <div className="text-xs text-slate-400">{event.collectionName}</div>
+                        <div className="font-semibold text-[color:var(--color-text-strong)]">{event.scriptName}</div>
+                        <div className="text-xs text-[color:var(--color-text-muted)]">{event.collectionName}</div>
                       </div>
                     </td>
                     <td className="px-4 py-3">
                       <div className="space-y-1">
-                        <div className="font-semibold text-slate-100">
+                        <div className="font-semibold text-[color:var(--color-text-strong)]">
                           {event.runnerName || event.runnerHostId || "Unassigned"}
                         </div>
                         {event.runnerHostId ? (
-                          <div className="text-xs text-slate-400">{event.runnerHostId}</div>
+                          <div className="text-xs text-[color:var(--color-text-muted)]">{event.runnerHostId}</div>
                         ) : null}
                       </div>
                     </td>
@@ -476,17 +483,17 @@ export default function SettingsLogs({ onAuthError }) {
       </div>
 
       {selectedEvent ? (
-        <div className="rounded border border-slate-800 bg-slate-900/50 p-5 shadow-sm">
-          <div className="mb-4 flex items-start justify-between gap-3 border-b border-slate-800 pb-3">
+        <div className={`${PANEL_CLASSES} p-5`}>
+          <div className="mb-4 flex items-start justify-between gap-3 border-b border-[color:var(--color-panel-border)] pb-3">
             <div className="space-y-1">
-              <p className="text-[11px] uppercase tracking-[0.08em] text-slate-400">Log Details</p>
-              <h5 className="text-xl font-semibold text-slate-50">{selectedEvent.scriptName}</h5>
-              <p className="text-sm text-slate-400">{selectedEvent.collectionName}</p>
+              <p className="text-[11px] uppercase tracking-[0.08em] text-[color:var(--color-text-muted)]">Log Details</p>
+              <h5 className="text-xl font-semibold text-[color:var(--color-text-strong)]">{selectedEvent.scriptName}</h5>
+              <p className="text-sm text-[color:var(--color-text-muted)]">{selectedEvent.collectionName}</p>
             </div>
             <button
               type="button"
               onClick={() => setSelectedEvent(null)}
-              className="rounded border border-slate-700 bg-slate-950/70 px-3 py-1.5 text-sm font-semibold text-slate-100 transition hover:border-sky-500 hover:text-sky-100"
+              className="rounded border border-[color:var(--color-panel-border)] bg-[color:var(--color-input-bg)] px-3 py-1.5 text-sm font-semibold text-[color:var(--color-text-strong)] transition hover:border-[color:var(--color-accent)] hover:text-[color:var(--color-accent)]"
             >
               Close
             </button>
@@ -500,13 +507,13 @@ export default function SettingsLogs({ onAuthError }) {
               value={
                 selectedEvent.runnerHostId ? (
                   <div className="space-y-0.5">
-                    <div className="font-semibold text-slate-100">
+                    <div className="font-semibold text-[color:var(--color-text-strong)]">
                       {selectedEvent.runnerName || selectedEvent.runnerHostId}
                     </div>
-                    <p className="text-xs text-slate-400">{selectedEvent.runnerHostId}</p>
+                    <p className="text-xs text-[color:var(--color-text-muted)]">{selectedEvent.runnerHostId}</p>
                   </div>
                 ) : (
-                  <span className="text-slate-500">Unassigned</span>
+                  <span className="text-[color:var(--color-text-muted)]">Unassigned</span>
                 )
               }
             />
@@ -516,9 +523,9 @@ export default function SettingsLogs({ onAuthError }) {
                 <div className="space-y-1">
                   <RequestBadge method={selectedEvent.httpType} fallback={selectedEvent.requestOrigin} />
                   {selectedEvent.triggeredByUserName ? (
-                    <p className="text-xs text-slate-400">Triggered by {selectedEvent.triggeredByUserName}</p>
+                    <p className="text-xs text-[color:var(--color-text-muted)]">Triggered by {selectedEvent.triggeredByUserName}</p>
                   ) : selectedEvent.triggeredBy ? (
-                    <p className="text-xs text-slate-400">Triggered by {selectedEvent.triggeredBy}</p>
+                    <p className="text-xs text-[color:var(--color-text-muted)]">Triggered by {selectedEvent.triggeredBy}</p>
                   ) : null}
                 </div>
               }
@@ -534,16 +541,16 @@ export default function SettingsLogs({ onAuthError }) {
                     ))}
                   </div>
                 ) : (
-                  <span className="text-slate-500">None</span>
+                  <span className="text-[color:var(--color-text-muted)]">None</span>
                 )
               }
             />
           </dl>
 
           {selectedEvent.message ? (
-            <div className="mt-4 rounded border border-slate-800 bg-slate-900/50 p-4 text-sm text-slate-100 shadow-sm">
-              <p className="text-[11px] uppercase tracking-[0.08em] text-slate-400">Message</p>
-              <p className="whitespace-pre-wrap text-slate-100">{selectedEvent.message}</p>
+            <div className={`${PANEL_CLASSES} mt-4 p-4 text-sm text-[color:var(--color-text-strong)]`}>
+              <p className="text-[11px] uppercase tracking-[0.08em] text-[color:var(--color-text-muted)]">Message</p>
+              <p className="whitespace-pre-wrap text-[color:var(--color-text-strong)]">{selectedEvent.message}</p>
             </div>
           ) : null}
         </div>
@@ -554,9 +561,9 @@ export default function SettingsLogs({ onAuthError }) {
 
 function DetailRow({ label, value }) {
   return (
-    <div className="space-y-1 rounded border border-slate-800 bg-slate-900/50 p-3 shadow-sm">
-      <p className="text-[11px] uppercase tracking-wide text-slate-400">{label}</p>
-      <div className="text-sm text-slate-100">{value || <span className="text-slate-500">Unknown</span>}</div>
+    <div className={`${PANEL_CLASSES} space-y-1 p-3`}>
+      <p className="text-[11px] uppercase tracking-wide text-[color:var(--color-text-muted)]">{label}</p>
+      <div className="text-sm text-[color:var(--color-text-strong)]">{value || <span className="text-[color:var(--color-text-muted)]">Unknown</span>}</div>
     </div>
   );
 }

@@ -1833,13 +1833,19 @@ async function dispatchSchedulerJob(jobRow, { testRun = false } = {}) {
 
   let script;
   try {
-    script = await ensureScriptAccess({
+    const access = await ensureScriptAccess({
       scriptId,
       user: schedulerUser,
       requiredPermission: "run",
     });
+    script = access?.script;
   } catch (err) {
     console.error(`Scheduled job ${jobRow.id} could not load script`, err);
+    return null;
+  }
+
+  if (!script) {
+    console.error(`Scheduled job ${jobRow.id} script is unavailable.`);
     return null;
   }
 

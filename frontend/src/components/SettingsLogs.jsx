@@ -25,6 +25,17 @@ const HTTP_METHOD_OPTIONS = [
   { value: "DELETE", label: "DELETE" },
 ];
 
+const DATE_RANGE_OPTIONS = [
+  { value: "24h", label: "Last 24 hours" },
+  { value: "week", label: "Last week" },
+  { value: "month", label: "Last month" },
+  { value: "year", label: "Last year" },
+  { value: "all", label: "All time" },
+  { value: "custom", label: "Custom" },
+];
+
+const PAGE_SIZE = 50;
+
 function formatDateTime(value) {
   if (!value) return "Unknown";
   const date = new Date(value);
@@ -114,7 +125,31 @@ export default function SettingsLogs({ onAuthError }) {
     httpType: "",
     errorTag: "",
     search: "",
+    dateRange: "24h",
+    customFrom: "",
+    customTo: "",
   });
+  const [currentPage, setCurrentPage] = useState(1);
+  const queryFilters = useMemo(
+    () => ({
+      collectionId: filters.collectionId,
+      scriptId: filters.scriptId,
+      runnerHostId: filters.runnerHostId,
+      result: filters.result,
+      httpType: filters.httpType,
+      errorTag: filters.errorTag,
+      search: filters.search,
+    }),
+    [
+      filters.collectionId,
+      filters.errorTag,
+      filters.httpType,
+      filters.result,
+      filters.runnerHostId,
+      filters.scriptId,
+      filters.search,
+    ],
+  );
 
   const loadScripts = useCallback(async () => {
     try {
@@ -153,13 +188,13 @@ export default function SettingsLogs({ onAuthError }) {
     setError("");
     try {
       const params = new URLSearchParams();
-      if (filters.collectionId) params.set("collectionId", filters.collectionId);
-      if (filters.scriptId) params.set("scriptId", filters.scriptId);
-      if (filters.runnerHostId) params.set("runnerHostId", filters.runnerHostId);
-      if (filters.result) params.set("result", filters.result);
-      if (filters.httpType) params.set("httpType", filters.httpType);
-      if (filters.errorTag) params.set("errorTag", filters.errorTag);
-      if (filters.search) params.set("search", filters.search);
+      if (queryFilters.collectionId) params.set("collectionId", queryFilters.collectionId);
+      if (queryFilters.scriptId) params.set("scriptId", queryFilters.scriptId);
+      if (queryFilters.runnerHostId) params.set("runnerHostId", queryFilters.runnerHostId);
+      if (queryFilters.result) params.set("result", queryFilters.result);
+      if (queryFilters.httpType) params.set("httpType", queryFilters.httpType);
+      if (queryFilters.errorTag) params.set("errorTag", queryFilters.errorTag);
+      if (queryFilters.search) params.set("search", queryFilters.search);
       params.set("limit", "200");
 
       const query = params.toString();
@@ -176,7 +211,7 @@ export default function SettingsLogs({ onAuthError }) {
     } finally {
       setIsLoading(false);
     }
-  }, [filters, onAuthError]);
+  }, [onAuthError, queryFilters]);
 
   useEffect(() => {
     loadScripts();
@@ -188,15 +223,7 @@ export default function SettingsLogs({ onAuthError }) {
       loadEvents();
     }, 250);
     return () => clearTimeout(timer);
-  }, [filters, loadEvents]);
-
-  useEffect(() => {
-    if (!selectedEvent) return;
-    const stillPresent = events.some((event) => event.runId === selectedEvent.runId);
-    if (!stillPresent) {
-      setSelectedEvent(null);
-    }
-  }, [events, selectedEvent]);
+  }, [loadEvents, queryFilters]);
 
   const collectionOptions = useMemo(() => {
     const options = new Map();
@@ -258,13 +285,100 @@ export default function SettingsLogs({ onAuthError }) {
     return options.concat(namedOptions);
   }, [runnerHosts, events]);
 
+  const filteredEvents = useMemo(() => {
+    const now = Date.now();
+    let start = null;
+    let end = null;
+
+    switch (filters.dateRange) {
+      case "24h":
+        start = now - 24 * 60 * 60 * 1000;
+        end = now;
+        break;
+      case "week":
+        start = now - 7 * 24 * 60 * 60 * 1000;
+        end = now;
+        break;
+      case "month":
+        start = now - 30 * 24 * 60 * 60 * 1000;
+        end = now;
+        break;
+      case "year":
+        start = now - 365 * 24 * 60 * 60 * 1000;
+        end = now;
+        break;
+      case "custom":
+        if (filters.customFrom) {
+          const parsed = new Date(filters.customFrom);
+          if (!Number.isNaN(parsed.getTime())) {
+            start = parsed.getTime();
+          }
+        }
+        if (filters.customTo) {
+          const parsed = new Date(filters.customTo);
+          if (!Number.isNaN(parsed.getTime())) {
+            end = parsed.getTime();
+          }
+        }
+        break;
+      default:
+        start = null;
+        end = null;
+    }
+
+    return events.filter((event) => {
+      if (!event.timestamp) return true;
+      const eventTime = new Date(event.timestamp).getTime();
+      if (Number.isNaN(eventTime)) return true;
+      if (start !== null && eventTime < start) return false;
+      if (end !== null && eventTime > end) return false;
+      return true;
+    });
+  }, [events, filters.customFrom, filters.customTo, filters.dateRange]);
+
+  const totalPages = useMemo(
+    () => Math.max(1, Math.ceil(filteredEvents.length / PAGE_SIZE)),
+    [filteredEvents.length],
+  );
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [currentPage, totalPages]);
+
+  const paginatedEvents = useMemo(() => {
+    const startIndex = (currentPage - 1) * PAGE_SIZE;
+    return filteredEvents.slice(startIndex, startIndex + PAGE_SIZE);
+  }, [filteredEvents, currentPage]);
+
+  useEffect(() => {
+    if (!selectedEvent) return;
+    const stillPresent = filteredEvents.some((event) => event.runId === selectedEvent.runId);
+    if (!stillPresent) {
+      setSelectedEvent(null);
+    }
+  }, [filteredEvents, selectedEvent]);
+
+  const startEntry = filteredEvents.length === 0 ? 0 : (currentPage - 1) * PAGE_SIZE + 1;
+  const endEntry = filteredEvents.length === 0 ? 0 : Math.min(currentPage * PAGE_SIZE, filteredEvents.length);
+
   const handleFilterChange = (key, value) => {
     setFilters((prev) => {
       if (key === "collectionId") {
         return { ...prev, collectionId: value, scriptId: "" };
       }
+      if (key === "dateRange") {
+        return {
+          ...prev,
+          dateRange: value,
+          customFrom: value === "custom" ? prev.customFrom : "",
+          customTo: value === "custom" ? prev.customTo : "",
+        };
+      }
       return { ...prev, [key]: value };
     });
+    setCurrentPage(1);
   };
 
   return (
@@ -278,7 +392,7 @@ export default function SettingsLogs({ onAuthError }) {
       </div>
 
       <div className={`${PANEL_CLASSES} p-4`}>
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-3 lg:grid-cols-7">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8">
           <label className="space-y-1 text-sm text-[color:var(--color-text-strong)]">
             <span className="text-[11px] font-semibold uppercase tracking-wide text-[color:var(--color-text-muted)]">Collection</span>
             <select
@@ -292,6 +406,41 @@ export default function SettingsLogs({ onAuthError }) {
                 </option>
               ))}
             </select>
+          </label>
+
+          <label className="space-y-1 text-sm text-[color:var(--color-text-strong)] xl:col-span-2">
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-[color:var(--color-text-muted)]">Date Range</span>
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-[minmax(0,1fr)]">
+              <select
+                className={INPUT_CLASSES}
+                value={filters.dateRange}
+                onChange={(event) => handleFilterChange("dateRange", event.target.value)}
+              >
+                {DATE_RANGE_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+              {filters.dateRange === "custom" ? (
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  <input
+                    type="datetime-local"
+                    className={INPUT_CLASSES}
+                    value={filters.customFrom}
+                    onChange={(event) => handleFilterChange("customFrom", event.target.value)}
+                    placeholder="Start"
+                  />
+                  <input
+                    type="datetime-local"
+                    className={INPUT_CLASSES}
+                    value={filters.customTo}
+                    onChange={(event) => handleFilterChange("customTo", event.target.value)}
+                    placeholder="End"
+                  />
+                </div>
+              ) : null}
+            </div>
           </label>
 
           <label className="space-y-1 text-sm text-[color:var(--color-text-strong)]">
@@ -387,7 +536,7 @@ export default function SettingsLogs({ onAuthError }) {
           <div className="space-y-0.5">
             <h4 className="text-xs font-semibold uppercase tracking-[0.08em] text-[color:var(--color-text-muted)]">Log Events</h4>
             <p className="text-sm text-[color:var(--color-text-strong)]">
-              Showing {events.length} entr{events.length === 1 ? "y" : "ies"} matching your filters.
+              Showing {filteredEvents.length} entr{filteredEvents.length === 1 ? "y" : "ies"} matching your filters.
             </p>
           </div>
           <button
@@ -407,15 +556,15 @@ export default function SettingsLogs({ onAuthError }) {
         )}
 
         <div className="overflow-hidden rounded border border-[color:var(--color-panel-border)]">
-          <table className="min-w-[760px] w-full divide-y divide-[color:var(--color-divider)] text-sm text-[color:var(--color-text-strong)]">
+          <table className="min-w-[880px] w-full table-fixed divide-y divide-[color:var(--color-divider)] text-sm text-[color:var(--color-text-strong)]">
             <thead className="bg-[color:var(--color-surface-2)] text-xs uppercase tracking-wide text-[color:var(--color-text-muted)]">
               <tr>
-                <th className="px-4 py-2 text-left">Datetime</th>
+                <th className="w-32 px-4 py-2 text-left">Result</th>
+                <th className="w-48 px-4 py-2 text-left">Event Date</th>
                 <th className="px-4 py-2 text-left">Script</th>
-                <th className="px-4 py-2 text-left">Target Runner</th>
-                <th className="px-4 py-2 text-left">Request Type</th>
-                <th className="px-4 py-2 text-left">Result</th>
-                <th className="px-4 py-2 text-left">Error Tag</th>
+                <th className="w-56 px-4 py-2 text-left">Target Runner</th>
+                <th className="w-32 px-4 py-2 text-left">Request Type</th>
+                <th className="w-32 px-4 py-2 text-left">Error Tag</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[color:var(--color-divider)] bg-[color:var(--color-surface-1)] text-[color:var(--color-text-strong)]">
@@ -426,7 +575,7 @@ export default function SettingsLogs({ onAuthError }) {
                   </td>
                 </tr>
               )}
-              {!isLoading && events.length === 0 && (
+              {!isLoading && filteredEvents.length === 0 && (
                 <tr>
                   <td className="px-4 py-6 text-center text-sm text-[color:var(--color-text-muted)]" colSpan={6}>
                     No log events match your filters yet.
@@ -434,12 +583,15 @@ export default function SettingsLogs({ onAuthError }) {
                 </tr>
               )}
               {!isLoading &&
-                events.map((event) => (
+                paginatedEvents.map((event) => (
                   <tr
                     key={event.runId}
                     onClick={() => setSelectedEvent(event)}
                     className="cursor-pointer transition hover:bg-[color:var(--color-surface-3)]"
                   >
+                    <td className="px-4 py-3">
+                      <StatusBadge status={event.result} />
+                    </td>
                     <td className="px-4 py-3">
                       <div className="space-y-1 text-[color:var(--color-text-strong)]">
                         <div className="font-semibold">{formatDateTime(event.timestamp)}</div>
@@ -470,15 +622,37 @@ export default function SettingsLogs({ onAuthError }) {
                       <RequestBadge method={event.httpType} fallback={event.requestType} />
                     </td>
                     <td className="px-4 py-3">
-                      <StatusBadge status={event.result} />
-                    </td>
-                    <td className="px-4 py-3">
                       <TagBadge>{event.errorTag}</TagBadge>
                     </td>
                   </tr>
                 ))}
             </tbody>
           </table>
+        </div>
+
+        <div className="flex flex-wrap items-center justify-between gap-3 px-2 py-3 text-sm text-[color:var(--color-text-muted)]">
+          <span>
+            Showing {startEntry}-{endEntry} of {filteredEvents.length} entr{filteredEvents.length === 1 ? "y" : "ies"}.
+          </span>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
+              disabled={currentPage === 1 || filteredEvents.length === 0}
+              className="rounded border border-[color:var(--color-panel-border)] bg-[color:var(--color-input-bg)] px-3 py-1.5 text-sm font-semibold text-[color:var(--color-text-strong)] transition hover:border-[color:var(--color-accent)] hover:text-[color:var(--color-accent)] disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              Previous
+            </button>
+            <span className="text-[color:var(--color-text-strong)]">Page {currentPage} of {totalPages}</span>
+            <button
+              type="button"
+              onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
+              disabled={currentPage === totalPages || filteredEvents.length === 0}
+              className="rounded border border-[color:var(--color-panel-border)] bg-[color:var(--color-input-bg)] px-3 py-1.5 text-sm font-semibold text-[color:var(--color-text-strong)] transition hover:border-[color:var(--color-accent)] hover:text-[color:var(--color-accent)] disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              Next
+            </button>
+          </div>
         </div>
       </div>
 

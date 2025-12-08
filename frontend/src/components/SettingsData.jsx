@@ -9,6 +9,33 @@ export default function SettingsData({ onAuthError }) {
   const [isRestoring, setIsRestoring] = useState(false);
   const [backupPassword, setBackupPassword] = useState("");
   const [restorePassword, setRestorePassword] = useState("");
+  const [restoreOptions, setRestoreOptions] = useState({
+    restoreScripts: true,
+    restoreVariables: true,
+    restoreRunners: true,
+    restoreCollections: true,
+    restoreUsers: true,
+  });
+
+  const restoreOptionList = [
+    { key: "restoreScripts", label: "Scripts", description: "Script definitions and versions." },
+    {
+      key: "restoreVariables",
+      label: "Variables",
+      description: "Global, collection, and script variables.",
+    },
+    {
+      key: "restoreRunners",
+      label: "Runners",
+      description: "Restores runner hosts in a disconnected state.",
+    },
+    {
+      key: "restoreCollections",
+      label: "Collections",
+      description: "Collection metadata and permissions.",
+    },
+    { key: "restoreUsers", label: "Users", description: "User accounts and preferences." },
+  ];
 
   const handleDownloadBackup = async () => {
     setIsBackingUp(true);
@@ -47,6 +74,13 @@ export default function SettingsData({ onAuthError }) {
     }
   };
 
+  const handleRestoreOptionChange = (key) => (event) => {
+    setRestoreOptions((current) => ({
+      ...current,
+      [key]: Boolean(event?.target?.checked),
+    }));
+  };
+
   const handleRestore = async (event) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -82,9 +116,9 @@ export default function SettingsData({ onAuthError }) {
 
       await apiRequest("/api/data/restore", {
         method: "POST",
-        body: { backup: base64, password: restorePassword },
+        body: { backup: base64, password: restorePassword, ...restoreOptions },
       });
-      setRestoreSuccess("Database restored successfully. Running data has been reloaded.");
+      setRestoreSuccess("Selected data restored successfully. Running data has been reloaded.");
       setRestorePassword("");
     } catch (err) {
       if (onAuthError && (err.status === 401 || err.status === 403)) {
@@ -149,6 +183,26 @@ export default function SettingsData({ onAuthError }) {
           <p className="text-[11px] text-slate-500">
             Large backups may take several minutes to upload and process.
           </p>
+          <div className="grid gap-2 sm:grid-cols-2">
+            {restoreOptionList.map((option) => (
+              <label
+                key={option.key}
+                className="flex items-start gap-2 rounded border border-slate-800/80 bg-slate-950/40 p-2 text-xs text-slate-300"
+              >
+                <input
+                  type="checkbox"
+                  checked={restoreOptions[option.key]}
+                  onChange={handleRestoreOptionChange(option.key)}
+                  disabled={isRestoring}
+                  className="mt-[2px] accent-sky-500"
+                />
+                <span>
+                  <span className="block font-semibold text-slate-100">{option.label}</span>
+                  <span className="text-[11px] text-slate-400">{option.description}</span>
+                </span>
+              </label>
+            ))}
+          </div>
           <input
             type="file"
             accept=".db,.automn.enc,application/octet-stream"
@@ -160,11 +214,11 @@ export default function SettingsData({ onAuthError }) {
             Backup password (required for encrypted backups)
             <input
               type="password"
-              name="restore-password"
-              value={restorePassword}
-              onChange={(event) => setRestorePassword(event.target.value)}
-              placeholder="Enter the password if the backup is encrypted"
-              autoComplete="new-password"
+            name="restore-password"
+            value={restorePassword}
+            onChange={(event) => setRestorePassword(event.target.value)}
+            placeholder="Enter the password if the backup is encrypted"
+            autoComplete="new-password"
               className="mt-1 w-full rounded border border-slate-800 bg-slate-950/60 px-2 py-1 text-xs text-slate-200 focus:border-sky-500 focus:outline-none"
             />
           </label>

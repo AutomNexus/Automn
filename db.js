@@ -1,11 +1,13 @@
 const fs = require("fs");
 const path = require("path");
+const crypto = require("crypto");
 const sqlite3 = require("sqlite3").verbose();
 const { v4: uuidv4 } = require("uuid");
 const { hashPassword, verifyPassword } = require("./security");
 const { DEFAULT_ADMIN_PASSWORD } = require("./constants");
 
 const DEFAULT_CATEGORY_ID = "category-general";
+const SCHEDULER_USERNAME = "scheduler";
 
 const DB_FILE = path.join(__dirname, "data", "automn.db");
 
@@ -388,6 +390,14 @@ function backfillScriptCategories(database, defaultCategoryId = DEFAULT_CATEGORY
 
 function initializeSchema(database) {
   database.serialize(() => {
+    database.run(`
+      CREATE TABLE IF NOT EXISTS system_settings (
+        key TEXT PRIMARY KEY,
+        value TEXT,
+        updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
     database.run(`
       CREATE TABLE IF NOT EXISTS categories (
         id TEXT PRIMARY KEY,
@@ -1044,6 +1054,29 @@ function initializeSchema(database) {
     )
   `);
 
+    database.run(`
+      CREATE TABLE IF NOT EXISTS scheduler_jobs (
+        id TEXT PRIMARY KEY,
+        name TEXT,
+        script_id TEXT NOT NULL,
+        http_method TEXT DEFAULT 'POST',
+        payload TEXT,
+        schedule_config TEXT,
+        is_enabled INTEGER DEFAULT 1,
+        last_run_at TEXT,
+        next_run_at TEXT,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        created_by_user_id TEXT,
+        FOREIGN KEY(script_id) REFERENCES scripts(id) ON DELETE CASCADE,
+        FOREIGN KEY(created_by_user_id) REFERENCES users(id) ON DELETE SET NULL
+      )
+    `);
+
+    database.run(
+      `CREATE INDEX IF NOT EXISTS idx_scheduler_jobs_next_run ON scheduler_jobs(next_run_at)`,
+    );
+
     database.all("PRAGMA table_info(runs)", (err, columns) => {
       if (err) {
         console.error("Failed to inspect runs table", err);
@@ -1187,6 +1220,7 @@ function initializeSchema(database) {
         password_hash TEXT,
         must_change_password INTEGER DEFAULT 0,
         is_active INTEGER DEFAULT 1,
+        is_system INTEGER DEFAULT 0,
         is_admin INTEGER DEFAULT 0,
         created_at TEXT DEFAULT CURRENT_TIMESTAMP,
         last_login TEXT,
@@ -1224,6 +1258,13 @@ function initializeSchema(database) {
       }
 
       const columnNames = columns.map((col) => col.name);
+      if (!columnNames.includes("is_system")) {
+        database.run("ALTER TABLE users ADD COLUMN is_system INTEGER DEFAULT 0", (alterErr) => {
+          if (alterErr) {
+            console.error("Failed to add is_system column", alterErr);
+          }
+        });
+      }
       if (!columnNames.includes("deleted_at")) {
         database.run("ALTER TABLE users ADD COLUMN deleted_at TEXT", (alterErr) => {
           if (alterErr) {
@@ -1745,6 +1786,92 @@ function ensureAdminAccount(database = db) {
   });
 }
 
+function generateSystemPassword() {
+  try {
+    return crypto.randomBytes(32).toString("base64url");
+  } catch (err) {
+    return uuidv4();
+  }
+}
+
+function ensureSchedulerAccount(database = db) {
+  return new Promise((resolve, reject) => {
+    database.get(
+      "SELECT id, deleted_at, is_active, is_admin, is_system, password_hash FROM users WHERE username=?",
+      [SCHEDULER_USERNAME],
+      (err, row) => {
+        if (err) {
+          console.error("Failed to verify scheduler account", err);
+          reject(err);
+          return;
+        }
+
+        const passwordHash = hashPassword(generateSystemPassword());
+
+        if (!row) {
+          database.run(
+            `INSERT INTO users (id, username, password_hash, must_change_password, is_active, is_admin, is_system)
+             VALUES (?, ?, ?, 0, 1, 1, 1)`,
+            [uuidv4(), SCHEDULER_USERNAME, passwordHash],
+            (insertErr) => {
+              if (insertErr) {
+                console.error("Failed to create scheduler account", insertErr);
+                reject(insertErr);
+                return;
+              }
+              resolve();
+            },
+          );
+          return;
+        }
+
+        const updates = [];
+        const params = [];
+
+        if (row.deleted_at) {
+          updates.push("deleted_at=NULL");
+        }
+
+        if (!normalizeDbBoolean(row.is_active)) {
+          updates.push("is_active=1");
+        }
+
+        if (!normalizeDbBoolean(row.is_admin)) {
+          updates.push("is_admin=1");
+        }
+
+        if (!normalizeDbBoolean(row.is_system)) {
+          updates.push("is_system=1");
+        }
+
+        if (!row.password_hash) {
+          updates.push("password_hash=?");
+          params.push(passwordHash);
+        }
+
+        if (updates.length === 0) {
+          resolve();
+          return;
+        }
+
+        const setClause = updates.join(", ");
+        database.run(
+          `UPDATE users SET ${setClause} WHERE id=?`,
+          [...params, row.id],
+          (updateErr) => {
+            if (updateErr) {
+              console.error("Failed to update scheduler account", updateErr);
+              reject(updateErr);
+              return;
+            }
+            resolve();
+          },
+        );
+      },
+    );
+  });
+}
+
 const schemaReady = new Promise((resolve, reject) => {
   initializeSchema(db);
   db.serialize(() => {
@@ -1758,6 +1885,7 @@ const schemaReady = new Promise((resolve, reject) => {
   });
 })
   .then(() => ensureAdminAccount(db))
+  .then(() => ensureSchedulerAccount(db))
   .catch((err) => {
     console.error("Database initialization failed", err);
     throw err;
@@ -1766,6 +1894,7 @@ const schemaReady = new Promise((resolve, reject) => {
 module.exports = db;
 module.exports.schemaReady = schemaReady;
 module.exports.ensureAdminAccount = () => ensureAdminAccount(db);
+module.exports.ensureSchedulerAccount = () => ensureSchedulerAccount(db);
 module.exports.DB_PATH = DB_FILE;
 module.exports.createRunnerHost = (options) => createRunnerHostRecord(db, options);
 module.exports.getRunnerHostById = (id, options) => getRunnerHostById(db, id, options);

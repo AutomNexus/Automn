@@ -469,6 +469,8 @@ export default function App() {
   }, [currentUser]);
 
   useEffect(() => {
+    if (!authChecked) return;
+
     const hasActiveTab = visibleSettingsTabs.some((tab) => tab.id === settingsTab);
     if (!hasActiveTab) {
       const fallbackTab = visibleSettingsTabs[0]?.id || "ui";
@@ -476,7 +478,7 @@ export default function App() {
         setSettingsTab(fallbackTab);
       }
     }
-  }, [visibleSettingsTabs, settingsTab]);
+  }, [authChecked, visibleSettingsTabs, settingsTab]);
 
   const supportsPackageManagement = useMemo(() => {
     if (!selected?.id) {

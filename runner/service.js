@@ -30,8 +30,8 @@ const FAVICON_CANDIDATE_PATHS = [
 const DEFAULT_PORT = 3030;
 const DEFAULT_HEARTBEAT_INTERVAL = 60_000;
 const MIN_SECRET_LENGTH = 12;
-const RUNNER_VERSION = "0.2.14";
-const MINIMUM_HOST_VERSION = "0.2.0";
+const RUNNER_VERSION = "0.2.15";
+const MINIMUM_HOST_VERSION = "0.2.15";
 
 const runtimeExecutableEnv = {
   node: normalizeExecutableValue(process.env.AUTOMN_RUNNER_NODE_PATH || ""),

@@ -250,8 +250,36 @@ const VALID_SIDEBAR_ICON_IDS = new Set(
   SIDEBAR_ICON_OPTIONS.map((option) => option.id),
 );
 
+const THEME_STORAGE_KEY = "ui.theme.last";
+
+const readStoredThemeId = () => {
+  if (typeof window === "undefined") return null;
+  try {
+    const storedThemeId = window.localStorage.getItem(THEME_STORAGE_KEY);
+    if (typeof storedThemeId === "string" && THEMES[storedThemeId]) {
+      return storedThemeId;
+    }
+  } catch (err) {
+    console.error("Failed to read cached theme preference", err);
+  }
+  return null;
+};
+
+const persistStoredThemeId = (themeId) => {
+  if (typeof window === "undefined") return;
+  try {
+    if (THEMES[themeId]) {
+      window.localStorage.setItem(THEME_STORAGE_KEY, themeId);
+    } else {
+      window.localStorage.removeItem(THEME_STORAGE_KEY);
+    }
+  } catch (err) {
+    console.error("Failed to persist theme preference", err);
+  }
+};
+
 const getDefaultUiPreferences = () => ({
-  themeId: DEFAULT_THEME_ID,
+  themeId: readStoredThemeId() || DEFAULT_THEME_ID,
   sidebarIconStyle: "icons-left",
   systemIcons: { ...SYSTEM_ICON_DEFAULTS },
   showSidebarEndpoints: true,
@@ -394,7 +422,7 @@ const buildPathForEndpoint = (endpoint) =>
 
 export default function App() {
   const { confirm, alert } = useNotificationDialog();
-  const [themeId, setThemeId] = useState(DEFAULT_THEME_ID);
+  const [themeId, setThemeId] = useState(() => readStoredThemeId() || DEFAULT_THEME_ID);
   const [scripts, setScripts] = useState([]);
   const [categories, setCategories] = useState([]);
   const [selected, setSelected] = useState(null);
@@ -913,6 +941,10 @@ export default function App() {
   };
 
   useEffect(() => {
+    if (!authChecked) {
+      return;
+    }
+
     if (!currentUser) {
       previousUserIdRef.current = null;
       const loginDefaults = getDefaultUiPreferences();
@@ -1014,7 +1046,7 @@ export default function App() {
     return () => {
       isCancelled = true;
     };
-  }, [currentUser, handleAuthError]);
+  }, [authChecked, currentUser, handleAuthError]);
 
   const handlePasswordSubmit = async (event) => {
     event.preventDefault();
@@ -1085,15 +1117,22 @@ export default function App() {
     [],
   );
   const activeThemeId = THEMES[themeId] ? themeId : DEFAULT_THEME_ID;
-  const resolvedThemeId = !currentUser || isChangingPassword
-    ? LOGIN_THEME_ID
-    : activeThemeId;
+  const resolvedThemeId = !authChecked
+    ? activeThemeId
+    : !currentUser || isChangingPassword
+      ? LOGIN_THEME_ID
+      : activeThemeId;
 
   useEffect(() => {
     if (typeof document !== "undefined") {
       document.documentElement.dataset.theme = resolvedThemeId;
     }
   }, [resolvedThemeId]);
+
+  useEffect(() => {
+    if (!currentUser || isChangingPassword) return;
+    persistStoredThemeId(activeThemeId);
+  }, [activeThemeId, currentUser, isChangingPassword]);
 
   useEffect(() => {
     if (activeTab === "security" && !selected?.permissions?.manage) {

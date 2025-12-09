@@ -739,12 +739,20 @@ export default function App() {
   }, [currentUser, handleAuthError]);
 
   useEffect(() => {
+    if (routeEndpoint && !hasLoadedScripts && !selected) return;
     if (!availableTabs.includes(activeTab)) {
       setActiveTab(
         availableTabs[0] || (isCreating ? "editor" : "analytics"),
       );
     }
-  }, [availableTabs, activeTab, isCreating]);
+  }, [
+    activeTab,
+    availableTabs,
+    hasLoadedScripts,
+    isCreating,
+    routeEndpoint,
+    selected,
+  ]);
 
   useEffect(() => {
     if (!currentUser) {

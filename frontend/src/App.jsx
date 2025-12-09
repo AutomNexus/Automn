@@ -162,6 +162,41 @@ const LOGIN_THEME_ID = "automn";
 
 const SETTINGS_QUERY_PARAM = "settings";
 
+const getCachedUser = () => {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  const raw = window.sessionStorage.getItem("automn-current-user");
+  if (!raw) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(raw);
+  } catch (err) {
+    console.error("Failed to parse cached user", err);
+    return null;
+  }
+};
+
+const persistCachedUser = (user) => {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  if (!user) {
+    window.sessionStorage.removeItem("automn-current-user");
+    return;
+  }
+
+  try {
+    window.sessionStorage.setItem("automn-current-user", JSON.stringify(user));
+  } catch (err) {
+    console.error("Failed to persist cached user", err);
+  }
+};
+
 const readSettingsStateFromSearch = () => {
   if (typeof window === "undefined") {
     return { isOpen: false, tab: "ui" };
@@ -449,7 +484,7 @@ export default function App() {
   const [runnerHosts, setRunnerHosts] = useState([]);
   const [runnersLoaded, setRunnersLoaded] = useState(false);
   const [runnerLoadError, setRunnerLoadError] = useState("");
-  const [currentUser, setCurrentUser] = useState(null);
+  const [currentUser, setCurrentUser] = useState(() => getCachedUser());
   const [hostVersion, setHostVersion] = useState(null);
   const [authChecked, setAuthChecked] = useState(false);
   const [loginForm, setLoginForm] = useState({ username: "admin", password: "" });
@@ -475,6 +510,7 @@ export default function App() {
   );
   const [notificationsLoading, setNotificationsLoading] = useState(false);
   const [notificationsError, setNotificationsError] = useState("");
+  const [isAuthLoading, setIsAuthLoading] = useState(true);
   const [showReadNotifications, setShowReadNotifications] = useState(true);
   const [showSidebarEndpoints, setShowSidebarEndpoints] = useState(true);
   const [uiPreferencesLoaded, setUiPreferencesLoaded] = useState(false);
@@ -792,17 +828,21 @@ export default function App() {
 
   const fetchCurrentUser = useCallback(async () => {
     try {
+      setIsAuthLoading(true);
+      setAuthChecked(false);
       const data = await apiRequest("/api/auth/me");
       const user = data?.user || null;
       setCurrentUser(user);
       setHostVersion(data?.hostVersion || null);
       setIsChangingPassword(user?.mustChangePassword ?? false);
       setAuthChecked(true);
+      setIsAuthLoading(false);
       return user;
     } catch (err) {
       handleAuthError(err);
       setHostVersion(null);
       setAuthChecked(true);
+      setIsAuthLoading(false);
       return null;
     }
   }, [handleAuthError]);
@@ -1099,6 +1139,10 @@ export default function App() {
       setIsUpdatingPassword(false);
     }
   };
+
+  useEffect(() => {
+    persistCachedUser(currentUser);
+  }, [currentUser]);
 
   useEffect(() => {
     fetchCurrentUser();
@@ -2241,12 +2285,8 @@ export default function App() {
     </div>
   );
 
-  if (!authChecked) {
-    return renderAuthShell(
-      <div className="space-y-3 text-center text-sm text-slate-300">
-        <p>Checking your session…</p>
-      </div>,
-    );
+  if ((isAuthLoading || !authChecked) && !currentUser) {
+    return null;
   }
 
   if (isChangingPassword && currentUser) {

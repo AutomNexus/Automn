@@ -160,6 +160,32 @@ const ADMIN_ONLY_SETTINGS_TABS = new Set([
 
 const LOGIN_THEME_ID = "automn";
 
+const SETTINGS_STORAGE_KEY = "automn-settings-state";
+
+const readSettingsState = () => {
+  if (typeof window === "undefined") {
+    return { isOpen: false, tab: "ui" };
+  }
+
+  try {
+    const raw = window.localStorage.getItem(SETTINGS_STORAGE_KEY);
+    if (!raw) {
+      return { isOpen: false, tab: "ui" };
+    }
+
+    const parsed = JSON.parse(raw);
+    const tabId = typeof parsed?.tab === "string" ? parsed.tab : "ui";
+    const isValidTab = SETTINGS_TABS.some((tab) => tab.id === tabId);
+
+    return {
+      isOpen: Boolean(parsed?.isOpen),
+      tab: isValidTab ? tabId : "ui",
+    };
+  } catch {
+    return { isOpen: false, tab: "ui" };
+  }
+};
+
 const normalizeRunnerHost = (host) => {
   if (!host || typeof host !== "object") {
     return null;
@@ -388,8 +414,9 @@ export default function App() {
   const [activeDraftId, setActiveDraftId] = useState(null);
   const [isDraftInitializing, setIsDraftInitializing] = useState(false);
   const [draftError, setDraftError] = useState("");
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [settingsTab, setSettingsTab] = useState("ui");
+  const initialSettingsState = readSettingsState();
+  const [isSettingsOpen, setIsSettingsOpen] = useState(initialSettingsState.isOpen);
+  const [settingsTab, setSettingsTab] = useState(initialSettingsState.tab);
   const [routeEndpoint, setRouteEndpoint] = useState(() => readRouteEndpoint());
   const [hasLoadedScripts, setHasLoadedScripts] = useState(false);
   const [isRunModalOpen, setIsRunModalOpen] = useState(false);
@@ -442,6 +469,8 @@ export default function App() {
   }, [currentUser]);
 
   useEffect(() => {
+    if (!authChecked) return;
+
     const hasActiveTab = visibleSettingsTabs.some((tab) => tab.id === settingsTab);
     if (!hasActiveTab) {
       const fallbackTab = visibleSettingsTabs[0]?.id || "ui";
@@ -449,7 +478,7 @@ export default function App() {
         setSettingsTab(fallbackTab);
       }
     }
-  }, [visibleSettingsTabs, settingsTab]);
+  }, [authChecked, visibleSettingsTabs, settingsTab]);
 
   const supportsPackageManagement = useMemo(() => {
     if (!selected?.id) {
@@ -1087,7 +1116,6 @@ export default function App() {
 
   const openSettings = useCallback(() => {
     setIsSettingsOpen(true);
-    setSettingsTab("ui");
     setSelected(null);
     setIsCreating(false);
     setIsRecycleOpen(false);
@@ -1111,6 +1139,32 @@ export default function App() {
     window.addEventListener("popstate", handlePopState);
     return () => window.removeEventListener("popstate", handlePopState);
   }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+
+    const handleVisibilityChange = () => {
+      const { isOpen, tab } = readSettingsState();
+      setIsSettingsOpen(isOpen);
+      if (isOpen) {
+        setSettingsTab(tab);
+      }
+    };
+
+    window.addEventListener("storage", handleVisibilityChange);
+    return () => window.removeEventListener("storage", handleVisibilityChange);
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    try {
+      const nextState = JSON.stringify({ isOpen: isSettingsOpen, tab: settingsTab });
+      window.localStorage.setItem(SETTINGS_STORAGE_KEY, nextState);
+    } catch {
+      // Ignore persistence failures (e.g., storage disabled).
+    }
+  }, [isSettingsOpen, settingsTab]);
 
   const getCategoryKey = useCallback(
     (categoryName) => (categoryName?.trim() || "General").toLowerCase(),

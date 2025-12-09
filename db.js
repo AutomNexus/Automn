@@ -460,6 +460,7 @@ function initializeSchema(database) {
         id TEXT PRIMARY KEY,
         name TEXT,
         endpoint TEXT UNIQUE,
+        recycled_from_endpoint TEXT,
         language TEXT,
         code TEXT,
         timeout INTEGER DEFAULT 0,
@@ -523,6 +524,23 @@ function initializeSchema(database) {
           (alterErr) => {
             if (alterErr) {
               console.error("Failed to add is_recycled column", alterErr);
+            }
+          },
+        );
+      }
+
+      const hasRecycledFromEndpoint = columns.some(
+        (col) => col.name === "recycled_from_endpoint",
+      );
+      if (!hasRecycledFromEndpoint) {
+        database.run(
+          "ALTER TABLE scripts ADD COLUMN recycled_from_endpoint TEXT",
+          (alterErr) => {
+            if (alterErr) {
+              console.error(
+                "Failed to add recycled_from_endpoint column",
+                alterErr,
+              );
             }
           },
         );

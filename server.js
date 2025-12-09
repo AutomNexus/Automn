@@ -3160,6 +3160,9 @@ function mapScriptRow(
   const hasRunToken = Boolean(row.run_token);
   const runTokenPreview = hasRunToken ? sanitizeScriptToken(row.run_token) : null;
 
+  const recycledEndpoint = row.recycled_from_endpoint || null;
+  const activeEndpoint = row.endpoint || recycledEndpoint || "";
+
   const category = categoryRow
     ? {
       id: categoryRow.id,
@@ -3174,7 +3177,8 @@ function mapScriptRow(
   return {
     id: row.id,
     name: row.name,
-    endpoint: row.endpoint,
+    endpoint: activeEndpoint,
+    recycledEndpoint,
     language: row.language,
     timeout: row.timeout,
     code: row.code,
@@ -3311,7 +3315,10 @@ async function ensureScriptAccess(options = {}) {
     throw err;
   }
 
-  const scriptRow = await loadScriptWithOwner(identifier.where, [identifier.value]);
+  let scriptRow = await loadScriptWithOwner(identifier.where, [identifier.value]);
+  if (!scriptRow && !scriptId && allowRecycled && endpoint) {
+    scriptRow = await loadScriptWithOwner("s.recycled_from_endpoint=?", [endpoint]);
+  }
   if (!scriptRow) {
     const err = new Error("Script not found");
     err.status = 404;
@@ -5241,6 +5248,35 @@ function unregisterScriptRoute(endpoint) {
     app._router.stack = app._router.stack.filter(
       (layer) => !(layer.route && layer.route.path === pathToRemove)
     );
+  }
+}
+
+async function generateRestoredEndpoint(baseEndpoint, scriptId = null) {
+  const normalizedBase =
+    typeof baseEndpoint === "string" && baseEndpoint.trim()
+      ? baseEndpoint.trim()
+      : "";
+  if (!normalizedBase) {
+    return null;
+  }
+
+  let candidate = normalizedBase;
+  let suffix = 0;
+
+  while (true) {
+    const collision = await dbGet(
+      `SELECT id
+         FROM scripts
+        WHERE endpoint = ?
+          AND (? IS NULL OR id <> ?)
+          AND is_recycled = 0`,
+      [candidate, scriptId, scriptId],
+    );
+    if (!collision) {
+      return candidate;
+    }
+    suffix += 1;
+    candidate = `${normalizedBase}_restored${suffix}`;
   }
 }
 // ─────────────────────────────────────────────
@@ -7426,7 +7462,7 @@ app.post("/api/scripts", async (req, res) => {
         : lastVersionUserId || ownerId || versionAuthorId || null;
 
       await dbRun(
-        `UPDATE scripts SET name=?, endpoint=?, language=?, code=?, timeout=?, project_name=?, category_id=?, inherit_category_permissions=?, inherit_category_runner=?, runner_host_id=?, owner_id=?, last_version_user_id=?, is_recycled=0, recycled_at=NULL, run_method=?, allowed_methods=?, run_headers=?, run_body=?, expose_automn_response=?, expose_run_id=?, is_draft=0 WHERE id=?`,
+        `UPDATE scripts SET name=?, endpoint=?, language=?, code=?, timeout=?, project_name=?, category_id=?, inherit_category_permissions=?, inherit_category_runner=?, runner_host_id=?, owner_id=?, last_version_user_id=?, is_recycled=0, recycled_at=NULL, recycled_from_endpoint=NULL, run_method=?, allowed_methods=?, run_headers=?, run_body=?, expose_automn_response=?, expose_run_id=?, is_draft=0 WHERE id=?`,
         [
           name,
           endpoint,
@@ -8189,6 +8225,11 @@ app.get("/api/scripts", async (req, res) => {
       return;
     }
 
+    const includeRecycled =
+      req.query.includeRecycled === "1" ||
+      req.query.includeRecycled === "true" ||
+      req.query.includeRecycled === "yes";
+
     const params = [user.id, user.id];
     let query = `
       SELECT s.*, owner.username AS owner_username,
@@ -8234,7 +8275,7 @@ app.get("/api/scripts", async (req, res) => {
             FROM script_packages
            GROUP BY script_id
         ) pkgs ON pkgs.script_id = s.id
-       WHERE s.is_recycled = 0 AND s.is_draft = 0
+       WHERE s.is_draft = 0${includeRecycled ? "" : " AND s.is_recycled = 0"}
     `;
 
     if (!user.isAdmin) {
@@ -8275,13 +8316,19 @@ app.delete("/api/scripts/:endpoint", async (req, res) => {
       requiredPermission: "delete",
     });
 
+    const recycledEndpoint = script.endpoint || script.recycled_from_endpoint || null;
     const recycledAt = new Date().toISOString();
     await dbRun(
-      "UPDATE scripts SET is_recycled=1, recycled_at=? WHERE id=?",
+      `UPDATE scripts
+          SET is_recycled=1,
+              recycled_at=?,
+              recycled_from_endpoint=COALESCE(recycled_from_endpoint, endpoint),
+              endpoint=NULL
+        WHERE id=?`,
       [recycledAt, script.id],
     );
-    unregisterScriptRoute(script.endpoint);
-    res.json({ recycled: true, endpoint: script.endpoint, recycledAt });
+    unregisterScriptRoute(recycledEndpoint);
+    res.json({ recycled: true, endpoint: recycledEndpoint, recycledAt });
   } catch (err) {
     if (err.status) {
       res.status(err.status).json({ error: err.message });
@@ -8306,7 +8353,7 @@ app.delete("/api/scripts/:id/permanent", async (req, res) => {
     await dbRun("DELETE FROM script_versions WHERE script_id=?", [script.id]);
     await dbRun("DELETE FROM script_variables WHERE script_id=?", [script.id]);
     await dbRun("DELETE FROM scripts WHERE id=?", [script.id]);
-    unregisterScriptRoute(script.endpoint);
+    unregisterScriptRoute(script.endpoint || script.recycled_from_endpoint);
     res.json({ deleted: true });
   } catch (err) {
     if (err.status) {
@@ -8327,9 +8374,40 @@ app.post("/api/scripts/:id/recover", async (req, res) => {
       allowRecycled: true,
     });
 
-    await dbRun("UPDATE scripts SET is_recycled=0, recycled_at=NULL WHERE id=?", [script.id]);
-    registerScriptRoute({ ...script, is_recycled: 0, recycled_at: null });
-    res.json({ recovered: true, endpoint: script.endpoint });
+    const baseEndpoint =
+      (script.recycled_from_endpoint && script.recycled_from_endpoint.trim()) ||
+      (script.endpoint && script.endpoint.trim()) ||
+      "";
+
+    if (!baseEndpoint) {
+      res.status(400).json({ error: "Script endpoint is missing and cannot be restored" });
+      return;
+    }
+
+    const restoredEndpoint = await generateRestoredEndpoint(baseEndpoint, script.id);
+    if (!restoredEndpoint) {
+      res.status(400).json({ error: "Unable to restore script endpoint" });
+      return;
+    }
+
+    await dbRun(
+      `UPDATE scripts
+          SET endpoint=?,
+              is_recycled=0,
+              recycled_at=NULL,
+              recycled_from_endpoint=NULL
+        WHERE id=?`,
+      [restoredEndpoint, script.id],
+    );
+
+    registerScriptRoute({
+      ...script,
+      endpoint: restoredEndpoint,
+      is_recycled: 0,
+      recycled_at: null,
+      recycled_from_endpoint: null,
+    });
+    res.json({ recovered: true, endpoint: restoredEndpoint });
   } catch (err) {
     if (err.status) {
       res.status(err.status).json({ error: err.message });

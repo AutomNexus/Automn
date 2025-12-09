@@ -173,6 +173,16 @@ export default function SettingsScheduler({ onAuthError }) {
     }));
   }, [scripts]);
 
+  const scriptLookup = useMemo(() => {
+    const lookup = {};
+    scripts.forEach((script) => {
+      if (script?.id) {
+        lookup[script.id] = script;
+      }
+    });
+    return lookup;
+  }, [scripts]);
+
   const resetForm = () => {
     setForm(DEFAULT_FORM_STATE);
     setEditingId("");
@@ -305,6 +315,16 @@ export default function SettingsScheduler({ onAuthError }) {
   };
 
   const handleEnableToggle = async (job) => {
+    const script = job?.scriptId ? scriptLookup[job.scriptId] : null;
+    const scriptIsRecycled = Boolean(script?.isRecycled || job.scriptIsRecycled);
+    if (scriptIsRecycled && !job.isEnabled) {
+      showNotification({
+        title: "Cannot enable job",
+        description: "The linked script is in the recycle bin. Restore it before enabling this job.",
+        tone: "error",
+      });
+      return;
+    }
     try {
       await apiRequest(`/api/settings/scheduler/jobs/${job.id}`, {
         method: "PATCH",
@@ -333,6 +353,15 @@ export default function SettingsScheduler({ onAuthError }) {
   };
 
   const handleTest = async (job) => {
+    const script = job?.scriptId ? scriptLookup[job.scriptId] : null;
+    if (script?.isRecycled || job.scriptIsRecycled) {
+      showNotification({
+        title: "Cannot test job",
+        description: "Restore the script from the recycle bin before running a test.",
+        tone: "error",
+      });
+      return;
+    }
     try {
       await apiRequest(`/api/settings/scheduler/jobs/${job.id}/test`, {
         method: "POST",
@@ -598,31 +627,45 @@ export default function SettingsScheduler({ onAuthError }) {
                 key={job.id}
                 className="rounded border border-[color:var(--color-panel-border)] bg-[color:var(--color-surface-1)] p-4"
               >
-                <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <div className="text-sm font-semibold text-slate-100">{job.name || "Untitled job"}</div>
-                    <div className="text-xs text-slate-400">{formatScheduleSummary(job)}</div>
-                    <div className="text-xs text-slate-500">Script: {job.scriptId || "Unknown"}</div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span
-                      className={`rounded-full px-2 py-1 text-[10px] font-semibold uppercase ${
-                        job.isEnabled
-                          ? "bg-emerald-600/20 text-emerald-200"
-                          : "bg-slate-700 text-slate-300"
-                      }`}
-                    >
-                      {job.isEnabled ? "Enabled" : "Disabled"}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => handleEnableToggle(job)}
-                      className="rounded border border-slate-700 px-2 py-1 text-xs text-slate-200 hover:border-sky-500"
-                    >
-                      {job.isEnabled ? "Disable" : "Enable"}
-                    </button>
-                  </div>
-                </div>
+                {(() => {
+                  const relatedScript = job?.scriptId ? scriptLookup[job.scriptId] : null;
+                  const scriptName = relatedScript?.name || job.scriptName || job.scriptId || "Unknown";
+                  const scriptIsRecycled = Boolean(relatedScript?.isRecycled || job.scriptIsRecycled);
+                  const scriptLabel = scriptIsRecycled ? `${scriptName} (recycled)` : scriptName;
+                  return (
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <div className="text-sm font-semibold text-slate-100">{job.name || "Untitled job"}</div>
+                        <div className="text-xs text-slate-400">{formatScheduleSummary(job)}</div>
+                        <div className="text-xs text-slate-500">Script: {scriptLabel}</div>
+                        {scriptIsRecycled && (
+                          <div className="mt-2 rounded bg-amber-900/30 px-2 py-1 text-[11px] font-semibold text-amber-100">
+                            Script is in the recycle bin. Jobs remain disabled until it is restored.
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={`rounded-full px-2 py-1 text-[10px] font-semibold uppercase ${
+                            job.isEnabled
+                              ? "bg-emerald-600/20 text-emerald-200"
+                              : "bg-slate-700 text-slate-300"
+                          }`}
+                        >
+                          {job.isEnabled ? "Enabled" : "Disabled"}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => handleEnableToggle({ ...job, scriptIsRecycled })}
+                          disabled={scriptIsRecycled}
+                          className="rounded border border-slate-700 px-2 py-1 text-xs text-slate-200 hover:border-sky-500 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          {job.isEnabled ? "Disable" : "Enable"}
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })()}
                 <div className="mt-3 grid gap-2 text-xs text-slate-400 sm:grid-cols-3">
                   <div>
                     <div className="font-semibold text-slate-300">HTTP Method</div>
@@ -641,7 +684,8 @@ export default function SettingsScheduler({ onAuthError }) {
                   <button
                     type="button"
                     onClick={() => handleTest(job)}
-                    className="rounded bg-emerald-600 px-3 py-1.5 font-semibold text-white hover:bg-emerald-500"
+                    className="rounded bg-emerald-600 px-3 py-1.5 font-semibold text-white hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-50"
+                    disabled={job.scriptIsRecycled}
                   >
                     Test
                   </button>

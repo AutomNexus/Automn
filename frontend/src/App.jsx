@@ -1371,6 +1371,7 @@ export default function App() {
             packageCount: Number(script.packageCount) || 0,
             packageCheckError: script.packageCheckError || null,
             packageRunnerHostId: script.packageRunnerHostId || null,
+            scheduledJobCount: Number(script.scheduledJobCount) || 0,
             inheritCategoryPermissions:
               script.inheritCategoryPermissions === undefined
                 ? true
@@ -1974,9 +1975,13 @@ export default function App() {
   const handleRecycle = async (script) => {
     if (!script?.endpoint) return;
     const label = script.name || script.endpoint;
+    const scheduledJobCount = Number(script.scheduledJobCount) || 0;
+    const scheduledJobWarning = scheduledJobCount
+      ? `\n\nThis script has ${scheduledJobCount} scheduled job${scheduledJobCount === 1 ? "" : "s"}. They will be disabled while the script is in the recycle bin.`
+      : "";
     const confirmed = await confirm({
       title: `Move "${label}" to the recycle bin?`,
-      message: "You can restore this script later from the recycle bin.",
+      message: `You can restore this script later from the recycle bin.${scheduledJobWarning}`,
       tone: "warn",
       confirmLabel: "Move to recycle bin",
     });
@@ -2010,10 +2015,14 @@ export default function App() {
   const handlePermanentDelete = async (script) => {
     if (!script?.id) return;
     const label = script.name || script.endpoint;
+    const scheduledJobCount = Number(script.scheduledJobCount) || 0;
+    const scheduledJobWarning = scheduledJobCount
+      ? `\n\nThis script has ${scheduledJobCount} scheduled job${scheduledJobCount === 1 ? "" : "s"}. They will be deleted along with the script.`
+      : "";
     const confirmed = await confirm({
       title: `Permanently delete "${label}"?`,
       message:
-        "This will remove the script, its settings, and all logs. This cannot be undone.",
+        `This will remove the script, its settings, and all logs. This cannot be undone.${scheduledJobWarning}`,
       tone: "danger",
       confirmLabel: "Delete script",
     });

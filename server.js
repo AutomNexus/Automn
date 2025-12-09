@@ -1727,6 +1727,8 @@ function sanitizeSchedulerJobRow(row) {
     id: row.id,
     name: row.name || "",
     scriptId: row.script_id || null,
+    scriptName: row.script_name || "",
+    scriptIsRecycled: normalizeDbBoolean(row.script_is_recycled),
     httpMethod: row.http_method || "POST",
     payload: row.payload || "",
     schedule,
@@ -1736,6 +1738,17 @@ function sanitizeSchedulerJobRow(row) {
     createdAt: row.created_at || null,
     updatedAt: row.updated_at || null,
   };
+}
+
+async function loadSchedulerJob(jobId) {
+  if (!jobId) return null;
+  return dbGet(
+    `SELECT sj.*, s.name AS script_name, s.is_recycled AS script_is_recycled
+       FROM scheduler_jobs sj
+       LEFT JOIN scripts s ON s.id = sj.script_id
+      WHERE sj.id=?`,
+    [jobId],
+  );
 }
 
 let schedulerUserCache = null;
@@ -3203,6 +3216,7 @@ function mapScriptRow(
     hasApiToken: hasRunToken,
     apiTokenPreview: runTokenPreview,
     variableCount: Number(row.variable_count) || 0,
+    scheduledJobCount: Number(row.scheduled_job_count) || 0,
     packageCount: Number(row.package_count) || 0,
     categoryId: category?.id || null,
     category,
@@ -3226,6 +3240,7 @@ async function loadScriptWithOwner(whereClause, params) {
   return dbGet(
     `SELECT s.*, owner.username AS owner_username, vars.variable_count,
             pkgs.package_count,
+            sched.scheduled_job_count AS scheduled_job_count,
             c.name AS category_name,
             c.description AS category_description,
             c.default_language AS category_default_language,
@@ -3254,6 +3269,11 @@ async function loadScriptWithOwner(whereClause, params) {
            FROM script_packages
           GROUP BY script_id
        ) pkgs ON pkgs.script_id = s.id
+       LEFT JOIN (
+         SELECT script_id, COUNT(*) AS scheduled_job_count
+           FROM scheduler_jobs
+          GROUP BY script_id
+       ) sched ON sched.script_id = s.id
        WHERE ${whereClause}`,
     params,
   );
@@ -4519,7 +4539,10 @@ app.delete("/api/settings/runner-hosts/:id", requireAdmin, async (req, res) => {
 app.get("/api/settings/scheduler", requireAdmin, async (req, res) => {
   try {
     const rows = await dbAll(
-      `SELECT * FROM scheduler_jobs ORDER BY created_at DESC, name COLLATE NOCASE ASC`,
+      `SELECT sj.*, s.name AS script_name, s.is_recycled AS script_is_recycled
+         FROM scheduler_jobs sj
+         LEFT JOIN scripts s ON s.id = sj.script_id
+        ORDER BY sj.created_at DESC, sj.name COLLATE NOCASE ASC`,
     );
     const jobs = Array.isArray(rows)
       ? rows.map((row) => sanitizeSchedulerJobRow(row)).filter(Boolean)
@@ -4586,7 +4609,7 @@ app.post("/api/settings/scheduler/jobs", requireAdmin, async (req, res) => {
       ],
     );
 
-    const createdRow = await dbGet("SELECT * FROM scheduler_jobs WHERE id=?", [jobId]);
+    const createdRow = await loadSchedulerJob(jobId);
     scheduleSchedulerTick(500);
     res.status(201).json({ job: sanitizeSchedulerJobRow(createdRow) });
   } catch (err) {
@@ -4602,7 +4625,7 @@ app.patch("/api/settings/scheduler/jobs/:id", requireAdmin, async (req, res) => 
     return;
   }
 
-  const existing = await dbGet("SELECT * FROM scheduler_jobs WHERE id=?", [jobId]);
+  const existing = await loadSchedulerJob(jobId);
   if (!existing) {
     res.status(404).json({ error: "Job not found" });
     return;
@@ -4614,6 +4637,7 @@ app.patch("/api/settings/scheduler/jobs/:id", requireAdmin, async (req, res) => 
   const params = [];
   let normalizedSchedule = null;
   let shouldRefreshNextRun = false;
+  let targetScriptIsRecycled = normalizeDbBoolean(existing.script_is_recycled);
 
   if (typeof name === "string") {
     updates.push("name=?");
@@ -4646,12 +4670,6 @@ app.patch("/api/settings/scheduler/jobs/:id", requireAdmin, async (req, res) => 
     shouldRefreshNextRun = true;
   }
 
-  if (typeof isEnabled === "boolean") {
-    updates.push("is_enabled=?");
-    params.push(isEnabled ? 1 : 0);
-    shouldRefreshNextRun = shouldRefreshNextRun || isEnabled;
-  }
-
   const normalizedScriptId = typeof scriptId === "string" ? scriptId.trim() : existing.script_id;
   if (scriptId !== undefined) {
     if (!normalizedScriptId) {
@@ -4659,7 +4677,12 @@ app.patch("/api/settings/scheduler/jobs/:id", requireAdmin, async (req, res) => 
       return;
     }
     try {
-      await ensureScriptAccess({ scriptId: normalizedScriptId, user: req.user, requiredPermission: "run" });
+      const scriptAccess = await ensureScriptAccess({
+        scriptId: normalizedScriptId,
+        user: req.user,
+        requiredPermission: "run",
+      });
+      targetScriptIsRecycled = Boolean(scriptAccess?.script?.is_recycled);
     } catch (err) {
       console.error("Scheduler job script validation failed", err);
       res.status(400).json({ error: "Script could not be loaded" });
@@ -4667,6 +4690,16 @@ app.patch("/api/settings/scheduler/jobs/:id", requireAdmin, async (req, res) => 
     }
     updates.push("script_id=?");
     params.push(normalizedScriptId);
+  }
+
+  if (typeof isEnabled === "boolean") {
+    if (isEnabled && targetScriptIsRecycled) {
+      res.status(400).json({ error: "Cannot enable a job for a recycled script" });
+      return;
+    }
+    updates.push("is_enabled=?");
+    params.push(isEnabled ? 1 : 0);
+    shouldRefreshNextRun = shouldRefreshNextRun || isEnabled;
   }
 
   if (!updates.length) {
@@ -4687,7 +4720,7 @@ app.patch("/api/settings/scheduler/jobs/:id", requireAdmin, async (req, res) => 
 
   try {
     await dbRun(`UPDATE scheduler_jobs SET ${updates.join(", ")} WHERE id=?`, params);
-    const updated = await dbGet("SELECT * FROM scheduler_jobs WHERE id=?", [jobId]);
+    const updated = await loadSchedulerJob(jobId);
     scheduleSchedulerTick(500);
     res.json({ job: sanitizeSchedulerJobRow(updated) });
   } catch (err) {
@@ -8250,6 +8283,7 @@ app.get("/api/scripts", async (req, res) => {
              c.is_system AS category_is_system,
              vars.variable_count AS variable_count,
              pkgs.package_count AS package_count,
+             sched.scheduled_job_count AS scheduled_job_count,
              sr.name AS script_runner_name,
              sr.status AS script_runner_status,
              sr.status_message AS script_runner_status_message,
@@ -8275,6 +8309,11 @@ app.get("/api/scripts", async (req, res) => {
             FROM script_packages
            GROUP BY script_id
         ) pkgs ON pkgs.script_id = s.id
+        LEFT JOIN (
+          SELECT script_id, COUNT(*) AS scheduled_job_count
+            FROM scheduler_jobs
+           GROUP BY script_id
+        ) sched ON sched.script_id = s.id
        WHERE s.is_draft = 0${includeRecycled ? "" : " AND s.is_recycled = 0"}
     `;
 
@@ -8327,6 +8366,12 @@ app.delete("/api/scripts/:endpoint", async (req, res) => {
         WHERE id=?`,
       [recycledAt, script.id],
     );
+    await dbRun(
+      `UPDATE scheduler_jobs
+          SET is_enabled=0, next_run_at=NULL, updated_at=CURRENT_TIMESTAMP
+        WHERE script_id=?`,
+      [script.id],
+    );
     unregisterScriptRoute(recycledEndpoint);
     res.json({ recycled: true, endpoint: recycledEndpoint, recycledAt });
   } catch (err) {
@@ -8352,6 +8397,7 @@ app.delete("/api/scripts/:id/permanent", async (req, res) => {
     await dbRun("DELETE FROM runs WHERE script_id=?", [script.id]);
     await dbRun("DELETE FROM script_versions WHERE script_id=?", [script.id]);
     await dbRun("DELETE FROM script_variables WHERE script_id=?", [script.id]);
+    await dbRun("DELETE FROM scheduler_jobs WHERE script_id=?", [script.id]);
     await dbRun("DELETE FROM scripts WHERE id=?", [script.id]);
     unregisterScriptRoute(script.endpoint || script.recycled_from_endpoint);
     res.json({ deleted: true });

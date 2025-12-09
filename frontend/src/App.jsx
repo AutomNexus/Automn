@@ -160,6 +160,85 @@ const ADMIN_ONLY_SETTINGS_TABS = new Set([
 
 const LOGIN_THEME_ID = "automn";
 
+const SETTINGS_QUERY_PARAM = "settings";
+const SCRIPT_TAB_QUERY_PARAM = "tab";
+
+const SCRIPT_TAB_IDS = [
+  "analytics",
+  "editor",
+  "packages",
+  "variables",
+  "versions",
+  "security",
+];
+
+const getCachedUser = () => {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  const raw = window.sessionStorage.getItem("automn-current-user");
+  if (!raw) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(raw);
+  } catch (err) {
+    console.error("Failed to parse cached user", err);
+    return null;
+  }
+};
+
+const persistCachedUser = (user) => {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  if (!user) {
+    window.sessionStorage.removeItem("automn-current-user");
+    return;
+  }
+
+  try {
+    window.sessionStorage.setItem("automn-current-user", JSON.stringify(user));
+  } catch (err) {
+    console.error("Failed to persist cached user", err);
+  }
+};
+
+const readSettingsStateFromSearch = () => {
+  if (typeof window === "undefined") {
+    return { isOpen: false, tab: "ui" };
+  }
+
+  const search = window.location.search || "";
+  const searchParams = new URLSearchParams(search);
+  const tabId = searchParams.get(SETTINGS_QUERY_PARAM);
+  if (!tabId) {
+    return { isOpen: false, tab: "ui" };
+  }
+
+  const isValidTab = SETTINGS_TABS.some((tab) => tab.id === tabId);
+
+  return {
+    isOpen: true,
+    tab: isValidTab ? tabId : "ui",
+  };
+};
+
+const readScriptTabFromSearch = () => {
+  if (typeof window === "undefined") {
+    return "analytics";
+  }
+
+  const search = window.location.search || "";
+  const searchParams = new URLSearchParams(search);
+  const tabId = (searchParams.get(SCRIPT_TAB_QUERY_PARAM) || "").toLowerCase();
+
+  return SCRIPT_TAB_IDS.includes(tabId) ? tabId : "analytics";
+};
+
 const normalizeRunnerHost = (host) => {
   if (!host || typeof host !== "object") {
     return null;
@@ -228,8 +307,36 @@ const VALID_SIDEBAR_ICON_IDS = new Set(
   SIDEBAR_ICON_OPTIONS.map((option) => option.id),
 );
 
+const THEME_STORAGE_KEY = "ui.theme.last";
+
+const readStoredThemeId = () => {
+  if (typeof window === "undefined") return null;
+  try {
+    const storedThemeId = window.localStorage.getItem(THEME_STORAGE_KEY);
+    if (typeof storedThemeId === "string" && THEMES[storedThemeId]) {
+      return storedThemeId;
+    }
+  } catch (err) {
+    console.error("Failed to read cached theme preference", err);
+  }
+  return null;
+};
+
+const persistStoredThemeId = (themeId) => {
+  if (typeof window === "undefined") return;
+  try {
+    if (THEMES[themeId]) {
+      window.localStorage.setItem(THEME_STORAGE_KEY, themeId);
+    } else {
+      window.localStorage.removeItem(THEME_STORAGE_KEY);
+    }
+  } catch (err) {
+    console.error("Failed to persist theme preference", err);
+  }
+};
+
 const getDefaultUiPreferences = () => ({
-  themeId: DEFAULT_THEME_ID,
+  themeId: readStoredThemeId() || DEFAULT_THEME_ID,
   sidebarIconStyle: "icons-left",
   systemIcons: { ...SYSTEM_ICON_DEFAULTS },
   showSidebarEndpoints: true,
@@ -372,11 +479,11 @@ const buildPathForEndpoint = (endpoint) =>
 
 export default function App() {
   const { confirm, alert } = useNotificationDialog();
-  const [themeId, setThemeId] = useState(DEFAULT_THEME_ID);
+  const [themeId, setThemeId] = useState(() => readStoredThemeId() || DEFAULT_THEME_ID);
   const [scripts, setScripts] = useState([]);
   const [categories, setCategories] = useState([]);
   const [selected, setSelected] = useState(null);
-  const [activeTab, setActiveTab] = useState("analytics");
+  const [activeTab, setActiveTab] = useState(() => readScriptTabFromSearch());
   const [collapsedCategories, setCollapsedCategories] = useState({});
   const [isRecycleOpen, setIsRecycleOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
@@ -388,8 +495,9 @@ export default function App() {
   const [activeDraftId, setActiveDraftId] = useState(null);
   const [isDraftInitializing, setIsDraftInitializing] = useState(false);
   const [draftError, setDraftError] = useState("");
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [settingsTab, setSettingsTab] = useState("ui");
+  const initialSettingsState = readSettingsStateFromSearch();
+  const [isSettingsOpen, setIsSettingsOpen] = useState(initialSettingsState.isOpen);
+  const [settingsTab, setSettingsTab] = useState(initialSettingsState.tab);
   const [routeEndpoint, setRouteEndpoint] = useState(() => readRouteEndpoint());
   const [hasLoadedScripts, setHasLoadedScripts] = useState(false);
   const [isRunModalOpen, setIsRunModalOpen] = useState(false);
@@ -398,7 +506,7 @@ export default function App() {
   const [runnerHosts, setRunnerHosts] = useState([]);
   const [runnersLoaded, setRunnersLoaded] = useState(false);
   const [runnerLoadError, setRunnerLoadError] = useState("");
-  const [currentUser, setCurrentUser] = useState(null);
+  const [currentUser, setCurrentUser] = useState(() => getCachedUser());
   const [hostVersion, setHostVersion] = useState(null);
   const [authChecked, setAuthChecked] = useState(false);
   const [loginForm, setLoginForm] = useState({ username: "admin", password: "" });
@@ -424,6 +532,7 @@ export default function App() {
   );
   const [notificationsLoading, setNotificationsLoading] = useState(false);
   const [notificationsError, setNotificationsError] = useState("");
+  const [isAuthLoading, setIsAuthLoading] = useState(true);
   const [showReadNotifications, setShowReadNotifications] = useState(true);
   const [showSidebarEndpoints, setShowSidebarEndpoints] = useState(true);
   const [uiPreferencesLoaded, setUiPreferencesLoaded] = useState(false);
@@ -442,6 +551,8 @@ export default function App() {
   }, [currentUser]);
 
   useEffect(() => {
+    if (!authChecked) return;
+
     const hasActiveTab = visibleSettingsTabs.some((tab) => tab.id === settingsTab);
     if (!hasActiveTab) {
       const fallbackTab = visibleSettingsTabs[0]?.id || "ui";
@@ -449,7 +560,7 @@ export default function App() {
         setSettingsTab(fallbackTab);
       }
     }
-  }, [visibleSettingsTabs, settingsTab]);
+  }, [authChecked, visibleSettingsTabs, settingsTab]);
 
   const supportsPackageManagement = useMemo(() => {
     if (!selected?.id) {
@@ -628,12 +739,20 @@ export default function App() {
   }, [currentUser, handleAuthError]);
 
   useEffect(() => {
+    if (routeEndpoint && !hasLoadedScripts && !selected) return;
     if (!availableTabs.includes(activeTab)) {
       setActiveTab(
         availableTabs[0] || (isCreating ? "editor" : "analytics"),
       );
     }
-  }, [availableTabs, activeTab, isCreating]);
+  }, [
+    activeTab,
+    availableTabs,
+    hasLoadedScripts,
+    isCreating,
+    routeEndpoint,
+    selected,
+  ]);
 
   useEffect(() => {
     if (!currentUser) {
@@ -739,17 +858,21 @@ export default function App() {
 
   const fetchCurrentUser = useCallback(async () => {
     try {
+      setIsAuthLoading(true);
+      setAuthChecked(false);
       const data = await apiRequest("/api/auth/me");
       const user = data?.user || null;
       setCurrentUser(user);
       setHostVersion(data?.hostVersion || null);
       setIsChangingPassword(user?.mustChangePassword ?? false);
       setAuthChecked(true);
+      setIsAuthLoading(false);
       return user;
     } catch (err) {
       handleAuthError(err);
       setHostVersion(null);
       setAuthChecked(true);
+      setIsAuthLoading(false);
       return null;
     }
   }, [handleAuthError]);
@@ -888,6 +1011,10 @@ export default function App() {
   };
 
   useEffect(() => {
+    if (!authChecked) {
+      return;
+    }
+
     if (!currentUser) {
       previousUserIdRef.current = null;
       const loginDefaults = getDefaultUiPreferences();
@@ -989,7 +1116,7 @@ export default function App() {
     return () => {
       isCancelled = true;
     };
-  }, [currentUser, handleAuthError]);
+  }, [authChecked, currentUser, handleAuthError]);
 
   const handlePasswordSubmit = async (event) => {
     event.preventDefault();
@@ -1044,6 +1171,10 @@ export default function App() {
   };
 
   useEffect(() => {
+    persistCachedUser(currentUser);
+  }, [currentUser]);
+
+  useEffect(() => {
     fetchCurrentUser();
   }, [fetchCurrentUser]);
 
@@ -1060,15 +1191,22 @@ export default function App() {
     [],
   );
   const activeThemeId = THEMES[themeId] ? themeId : DEFAULT_THEME_ID;
-  const resolvedThemeId = !currentUser || isChangingPassword
-    ? LOGIN_THEME_ID
-    : activeThemeId;
+  const resolvedThemeId = !authChecked
+    ? activeThemeId
+    : !currentUser || isChangingPassword
+      ? LOGIN_THEME_ID
+      : activeThemeId;
 
   useEffect(() => {
     if (typeof document !== "undefined") {
       document.documentElement.dataset.theme = resolvedThemeId;
     }
   }, [resolvedThemeId]);
+
+  useEffect(() => {
+    if (!currentUser || isChangingPassword) return;
+    persistStoredThemeId(activeThemeId);
+  }, [activeThemeId, currentUser, isChangingPassword]);
 
   useEffect(() => {
     if (activeTab === "security" && !selected?.permissions?.manage) {
@@ -1087,7 +1225,6 @@ export default function App() {
 
   const openSettings = useCallback(() => {
     setIsSettingsOpen(true);
-    setSettingsTab("ui");
     setSelected(null);
     setIsCreating(false);
     setIsRecycleOpen(false);
@@ -1107,10 +1244,39 @@ export default function App() {
     if (typeof window === "undefined") return undefined;
     const handlePopState = () => {
       setRouteEndpoint(readRouteEndpoint());
+      const { isOpen, tab } = readSettingsStateFromSearch();
+      setIsSettingsOpen(isOpen);
+      if (isOpen) {
+        setSettingsTab(tab);
+      }
+      setActiveTab(readScriptTabFromSearch());
     };
     window.addEventListener("popstate", handlePopState);
     return () => window.removeEventListener("popstate", handlePopState);
   }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const url = new URL(window.location.href);
+    const existingSearch = `${window.location.pathname}${window.location.search}`;
+    if (isSettingsOpen) {
+      url.searchParams.set(SETTINGS_QUERY_PARAM, settingsTab);
+    } else {
+      url.searchParams.delete(SETTINGS_QUERY_PARAM);
+    }
+
+    if (selected?.id || isCreating) {
+      url.searchParams.set(SCRIPT_TAB_QUERY_PARAM, activeTab);
+    } else {
+      url.searchParams.delete(SCRIPT_TAB_QUERY_PARAM);
+    }
+    url.hash = "";
+    const newUrl = `${url.pathname}${url.search}`;
+    if (newUrl !== existingSearch) {
+      window.history.replaceState({}, "", newUrl);
+    }
+  }, [activeTab, isCreating, isSettingsOpen, selected?.id, settingsTab]);
 
   const getCategoryKey = useCallback(
     (categoryName) => (categoryName?.trim() || "General").toLowerCase(),
@@ -1599,7 +1765,7 @@ export default function App() {
         ensureCategoryExpanded(match.categoryName || "General");
       }
       if (isDifferentScript) {
-        setActiveTab("analytics");
+        setActiveTab(readScriptTabFromSearch());
       }
     } else if (hasLoadedScripts) {
       setSelected(null);
@@ -2156,12 +2322,8 @@ export default function App() {
     </div>
   );
 
-  if (!authChecked) {
-    return renderAuthShell(
-      <div className="space-y-3 text-center text-sm text-slate-300">
-        <p>Checking your session…</p>
-      </div>,
-    );
+  if ((isAuthLoading || !authChecked) && !currentUser) {
+    return null;
   }
 
   if (isChangingPassword && currentUser) {

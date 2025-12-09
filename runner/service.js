@@ -30,7 +30,7 @@ const FAVICON_CANDIDATE_PATHS = [
 const DEFAULT_PORT = 3030;
 const DEFAULT_HEARTBEAT_INTERVAL = 60_000;
 const MIN_SECRET_LENGTH = 12;
-const RUNNER_VERSION = "0.2.15";
+const RUNNER_VERSION = "0.2.16";
 const MINIMUM_HOST_VERSION = "0.2.15";
 
 const runtimeExecutableEnv = {

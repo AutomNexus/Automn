@@ -8189,6 +8189,11 @@ app.get("/api/scripts", async (req, res) => {
       return;
     }
 
+    const includeRecycled =
+      req.query.includeRecycled === "1" ||
+      req.query.includeRecycled === "true" ||
+      req.query.includeRecycled === "yes";
+
     const params = [user.id, user.id];
     let query = `
       SELECT s.*, owner.username AS owner_username,
@@ -8234,7 +8239,7 @@ app.get("/api/scripts", async (req, res) => {
             FROM script_packages
            GROUP BY script_id
         ) pkgs ON pkgs.script_id = s.id
-       WHERE s.is_recycled = 0 AND s.is_draft = 0
+       WHERE s.is_draft = 0${includeRecycled ? "" : " AND s.is_recycled = 0"}
     `;
 
     if (!user.isAdmin) {

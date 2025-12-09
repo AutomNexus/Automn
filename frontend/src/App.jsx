@@ -1304,7 +1304,7 @@ export default function App() {
       }
 
       try {
-        const data = await apiRequest("/api/scripts");
+        const data = await apiRequest("/api/scripts?includeRecycled=1");
         const normalized = (Array.isArray(data) ? data : []).map((script) => {
           const rawCategoryName =
             (script.category && script.category.name) ||

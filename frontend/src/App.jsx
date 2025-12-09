@@ -475,6 +475,7 @@ export default function App() {
   );
   const [notificationsLoading, setNotificationsLoading] = useState(false);
   const [notificationsError, setNotificationsError] = useState("");
+  const [isAuthLoading, setIsAuthLoading] = useState(true);
   const [showReadNotifications, setShowReadNotifications] = useState(true);
   const [showSidebarEndpoints, setShowSidebarEndpoints] = useState(true);
   const [uiPreferencesLoaded, setUiPreferencesLoaded] = useState(false);
@@ -798,11 +799,13 @@ export default function App() {
       setHostVersion(data?.hostVersion || null);
       setIsChangingPassword(user?.mustChangePassword ?? false);
       setAuthChecked(true);
+      setIsAuthLoading(false);
       return user;
     } catch (err) {
       handleAuthError(err);
       setHostVersion(null);
       setAuthChecked(true);
+      setIsAuthLoading(false);
       return null;
     }
   }, [handleAuthError]);
@@ -2241,12 +2244,8 @@ export default function App() {
     </div>
   );
 
-  if (!authChecked) {
-    return renderAuthShell(
-      <div className="space-y-3 text-center text-sm text-slate-300">
-        <p>Checking your session…</p>
-      </div>,
-    );
+  if (isAuthLoading || !authChecked) {
+    return null;
   }
 
   if (isChangingPassword && currentUser) {

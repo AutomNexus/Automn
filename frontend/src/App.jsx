@@ -1258,7 +1258,7 @@ export default function App() {
       url.searchParams.delete(SETTINGS_QUERY_PARAM);
     }
 
-    if (selected?.id || isCreating || routeEndpoint) {
+    if (selected?.id || isCreating) {
       url.searchParams.set(SCRIPT_TAB_QUERY_PARAM, activeTab);
     } else {
       url.searchParams.delete(SCRIPT_TAB_QUERY_PARAM);
@@ -1268,14 +1268,7 @@ export default function App() {
     if (newUrl !== existingSearch) {
       window.history.replaceState({}, "", newUrl);
     }
-  }, [
-    activeTab,
-    isCreating,
-    isSettingsOpen,
-    routeEndpoint,
-    selected?.id,
-    settingsTab,
-  ]);
+  }, [activeTab, isCreating, isSettingsOpen, selected?.id, settingsTab]);
 
   const getCategoryKey = useCallback(
     (categoryName) => (categoryName?.trim() || "General").toLowerCase(),

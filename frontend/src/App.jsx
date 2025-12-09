@@ -160,30 +160,30 @@ const ADMIN_ONLY_SETTINGS_TABS = new Set([
 
 const LOGIN_THEME_ID = "automn";
 
-const SETTINGS_STORAGE_KEY = "automn-settings-state";
+const SETTINGS_HASH_PREFIX = "#settings";
 
-const readSettingsState = () => {
+const readSettingsStateFromHash = () => {
   if (typeof window === "undefined") {
     return { isOpen: false, tab: "ui" };
   }
 
-  try {
-    const raw = window.localStorage.getItem(SETTINGS_STORAGE_KEY);
-    if (!raw) {
-      return { isOpen: false, tab: "ui" };
-    }
-
-    const parsed = JSON.parse(raw);
-    const tabId = typeof parsed?.tab === "string" ? parsed.tab : "ui";
-    const isValidTab = SETTINGS_TABS.some((tab) => tab.id === tabId);
-
-    return {
-      isOpen: Boolean(parsed?.isOpen),
-      tab: isValidTab ? tabId : "ui",
-    };
-  } catch {
+  const hash = window.location.hash || "";
+  if (!hash.startsWith(SETTINGS_HASH_PREFIX)) {
     return { isOpen: false, tab: "ui" };
   }
+
+  const tabId = hash.replace(SETTINGS_HASH_PREFIX, "").replace(/^-/u, "") || "ui";
+  const isValidTab = SETTINGS_TABS.some((tab) => tab.id === tabId);
+
+  return {
+    isOpen: true,
+    tab: isValidTab ? tabId : "ui",
+  };
+};
+
+const buildSettingsHash = (tabId) => {
+  const suffix = tabId ? `-${tabId}` : "";
+  return `${SETTINGS_HASH_PREFIX}${suffix}`;
 };
 
 const normalizeRunnerHost = (host) => {
@@ -414,7 +414,7 @@ export default function App() {
   const [activeDraftId, setActiveDraftId] = useState(null);
   const [isDraftInitializing, setIsDraftInitializing] = useState(false);
   const [draftError, setDraftError] = useState("");
-  const initialSettingsState = readSettingsState();
+  const initialSettingsState = readSettingsStateFromHash();
   const [isSettingsOpen, setIsSettingsOpen] = useState(initialSettingsState.isOpen);
   const [settingsTab, setSettingsTab] = useState(initialSettingsState.tab);
   const [routeEndpoint, setRouteEndpoint] = useState(() => readRouteEndpoint());
@@ -1143,26 +1143,31 @@ export default function App() {
   useEffect(() => {
     if (typeof window === "undefined") return undefined;
 
-    const handleVisibilityChange = () => {
-      const { isOpen, tab } = readSettingsState();
+    const handleHashChange = () => {
+      const { isOpen, tab } = readSettingsStateFromHash();
       setIsSettingsOpen(isOpen);
       if (isOpen) {
         setSettingsTab(tab);
       }
     };
 
-    window.addEventListener("storage", handleVisibilityChange);
-    return () => window.removeEventListener("storage", handleVisibilityChange);
+    window.addEventListener("hashchange", handleHashChange);
+    return () => window.removeEventListener("hashchange", handleHashChange);
   }, []);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
 
-    try {
-      const nextState = JSON.stringify({ isOpen: isSettingsOpen, tab: settingsTab });
-      window.localStorage.setItem(SETTINGS_STORAGE_KEY, nextState);
-    } catch {
-      // Ignore persistence failures (e.g., storage disabled).
+    const currentHash = window.location.hash || "";
+    if (isSettingsOpen) {
+      const targetHash = buildSettingsHash(settingsTab);
+      if (currentHash !== targetHash) {
+        const newUrl = `${window.location.pathname}${window.location.search}${targetHash}`;
+        window.history.replaceState({}, "", newUrl);
+      }
+    } else if (currentHash.startsWith(SETTINGS_HASH_PREFIX)) {
+      const newUrl = `${window.location.pathname}${window.location.search}`;
+      window.history.replaceState({}, "", newUrl);
     }
   }, [isSettingsOpen, settingsTab]);
 

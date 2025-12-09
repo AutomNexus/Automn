@@ -161,6 +161,16 @@ const ADMIN_ONLY_SETTINGS_TABS = new Set([
 const LOGIN_THEME_ID = "automn";
 
 const SETTINGS_QUERY_PARAM = "settings";
+const SCRIPT_TAB_QUERY_PARAM = "tab";
+
+const SCRIPT_TAB_IDS = [
+  "analytics",
+  "editor",
+  "packages",
+  "variables",
+  "versions",
+  "security",
+];
 
 const getCachedUser = () => {
   if (typeof window === "undefined") {
@@ -215,6 +225,18 @@ const readSettingsStateFromSearch = () => {
     isOpen: true,
     tab: isValidTab ? tabId : "ui",
   };
+};
+
+const readScriptTabFromSearch = () => {
+  if (typeof window === "undefined") {
+    return "analytics";
+  }
+
+  const search = window.location.search || "";
+  const searchParams = new URLSearchParams(search);
+  const tabId = (searchParams.get(SCRIPT_TAB_QUERY_PARAM) || "").toLowerCase();
+
+  return SCRIPT_TAB_IDS.includes(tabId) ? tabId : "analytics";
 };
 
 const normalizeRunnerHost = (host) => {
@@ -461,7 +483,7 @@ export default function App() {
   const [scripts, setScripts] = useState([]);
   const [categories, setCategories] = useState([]);
   const [selected, setSelected] = useState(null);
-  const [activeTab, setActiveTab] = useState("analytics");
+  const [activeTab, setActiveTab] = useState(() => readScriptTabFromSearch());
   const [collapsedCategories, setCollapsedCategories] = useState({});
   const [isRecycleOpen, setIsRecycleOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
@@ -1219,6 +1241,7 @@ export default function App() {
       if (isOpen) {
         setSettingsTab(tab);
       }
+      setActiveTab(readScriptTabFromSearch());
     };
     window.addEventListener("popstate", handlePopState);
     return () => window.removeEventListener("popstate", handlePopState);
@@ -1234,12 +1257,25 @@ export default function App() {
     } else {
       url.searchParams.delete(SETTINGS_QUERY_PARAM);
     }
+
+    if (selected?.id || isCreating || routeEndpoint) {
+      url.searchParams.set(SCRIPT_TAB_QUERY_PARAM, activeTab);
+    } else {
+      url.searchParams.delete(SCRIPT_TAB_QUERY_PARAM);
+    }
     url.hash = "";
     const newUrl = `${url.pathname}${url.search}`;
     if (newUrl !== existingSearch) {
       window.history.replaceState({}, "", newUrl);
     }
-  }, [isSettingsOpen, settingsTab]);
+  }, [
+    activeTab,
+    isCreating,
+    isSettingsOpen,
+    routeEndpoint,
+    selected?.id,
+    settingsTab,
+  ]);
 
   const getCategoryKey = useCallback(
     (categoryName) => (categoryName?.trim() || "General").toLowerCase(),
@@ -1728,7 +1764,7 @@ export default function App() {
         ensureCategoryExpanded(match.categoryName || "General");
       }
       if (isDifferentScript) {
-        setActiveTab("analytics");
+        setActiveTab(readScriptTabFromSearch());
       }
     } else if (hasLoadedScripts) {
       setSelected(null);

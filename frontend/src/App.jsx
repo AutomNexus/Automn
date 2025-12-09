@@ -941,6 +941,10 @@ export default function App() {
   };
 
   useEffect(() => {
+    if (!authChecked) {
+      return;
+    }
+
     if (!currentUser) {
       previousUserIdRef.current = null;
       const loginDefaults = getDefaultUiPreferences();
@@ -1042,7 +1046,7 @@ export default function App() {
     return () => {
       isCancelled = true;
     };
-  }, [currentUser, handleAuthError]);
+  }, [authChecked, currentUser, handleAuthError]);
 
   const handlePasswordSubmit = async (event) => {
     event.preventDefault();
@@ -1113,9 +1117,11 @@ export default function App() {
     [],
   );
   const activeThemeId = THEMES[themeId] ? themeId : DEFAULT_THEME_ID;
-  const resolvedThemeId = !currentUser || isChangingPassword
-    ? LOGIN_THEME_ID
-    : activeThemeId;
+  const resolvedThemeId = !authChecked
+    ? activeThemeId
+    : !currentUser || isChangingPassword
+      ? LOGIN_THEME_ID
+      : activeThemeId;
 
   useEffect(() => {
     if (typeof document !== "undefined") {

@@ -7,6 +7,7 @@
     "setup": "npm install && npm --prefix frontend install && npm --prefix frontend run build",
     "build": "npm --prefix frontend run build",
     "runner:install": "npm ci --omit=dev",
+    "runner:pkg": "bash runner/build-runner-pkg.sh",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],

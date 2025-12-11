@@ -4,4 +4,5 @@ runner-scripts/
 runner-workdir/
 node_modules/
 data/
+dist/
 

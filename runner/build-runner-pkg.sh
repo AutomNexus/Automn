@@ -7,8 +7,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
-# Use a pkg release that exists on npm (prior default 5.11.0 does not).
-PKG_VERSION="${PKG_VERSION:-5.8.1}"
+PKG_VERSION="${PKG_VERSION:-5.11.0}"
 PKG_TARGET="${PKG_TARGET:-node20-linux-x64}"
 OUTPUT_DIR="${OUTPUT_DIR:-$ROOT_DIR/dist/runner-pkg}"
 STAGING_DIR="$OUTPUT_DIR/stage"

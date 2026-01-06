@@ -72,6 +72,7 @@ const scryptAsync = promisify(crypto.scrypt);
 
 const BANNED_USERNAMES = new Set(["api", "administrator", "system"]);
 const SCHEDULER_USERNAME = "scheduler";
+const SCHEDULER_SOURCE_HEADER = "x-automn-scheduler-source";
 const DEFAULT_COLLECTION_ID = "category-general";
 const DEFAULT_CATEGORY_ID = DEFAULT_COLLECTION_ID;
 const SUPPORTED_SCRIPT_LANGUAGES = new Set([
@@ -5477,287 +5478,13 @@ function registerScriptRoute(script) {
     `🌀 Registering script endpoint: ${endpoint} [${acceptedMethods.join(", ")}]`,
   );
 
-  // Async runner (used by POST)
-  const runAsync = async (req, res) => {
-    const httpMethod =
-      typeof req.method === "string" && req.method.trim()
-        ? req.method.trim().toUpperCase()
-        : "POST";
-    let parsedRequestBody;
-    try {
-      parsedRequestBody = await resolveRequestPayload(req);
-    } catch (bodyErr) {
-      console.error("Failed to read script request payload", bodyErr);
-      const statusCode = bodyErr.status || bodyErr.statusCode || 400;
-      res.status(statusCode).json({
-        error: bodyErr.message || "Failed to read request payload",
-        code: bodyErr.code || "invalid_payload",
-      });
-      return;
-    }
+  const isSchedulerSourceRequest = (req) =>
+    parseEnvBoolean(
+      normalizeHeaderValue(req?.headers?.[SCHEDULER_SOURCE_HEADER]),
+      false,
+    );
 
-    const input = parsedRequestBody === undefined ? {} : parsedRequestBody;
-    let runTracker = null;
-    const runId = uuidv4();
-    let latest = null;
-    let triggeredByLabel = "API";
-    let triggeredByUserId = null;
-
-    try {
-      const auth = await authenticateRequest(req);
-      const user = auth?.user || null;
-
-      const access = await ensureScriptAccess({
-        endpoint: script.endpoint,
-        user,
-        requiredPermission: user ? "run" : null,
-      });
-      latest = access.script;
-
-      triggeredByLabel = user?.username || "API";
-      triggeredByUserId = user?.id || null;
-
-      const codeVersion = await determineCodeVersionForScript(latest.id);
-
-      let tokenAccess;
-      try {
-        tokenAccess = evaluateScriptTokenAccess(req, latest, user);
-        if (tokenAccess.used) {
-          triggeredByLabel = `Token ${tokenAccess.masked}`;
-        }
-      } catch (tokenErr) {
-        const failureError = normalizeRunFailureError(tokenErr);
-        await recordImmediateRunFailure({
-          runId,
-          script: latest,
-          triggeredBy: triggeredByLabel,
-          triggeredByUserId,
-          httpMethod,
-          input,
-          error: failureError,
-          codeVersion,
-        });
-        res.status(tokenErr.status || failureError.status || 401).json({
-          error: failureError.message,
-          code: tokenErr.code || "unauthorized",
-        });
-        return;
-      }
-
-      const executionVariables = await loadScriptVariablesForExecution(latest);
-      const jobContext = {
-        httpMethod,
-        codeVersion,
-        scriptName:
-          typeof latest.name === "string" && latest.name.trim()
-            ? latest.name
-            : latest.endpoint || latest.id || "",
-      };
-
-      try {
-        runTracker = await createRunTracker({
-          runId,
-          script: latest,
-          triggeredBy: triggeredByLabel,
-          triggeredByUserId,
-          input,
-          httpMethod,
-          codeVersion,
-        });
-      } catch (trackerErr) {
-        console.error(`Failed to initialize run ${runId} tracker:`, trackerErr);
-      }
-
-      try {
-        await ensureHealthyRunnerAvailability(latest);
-      } catch (availabilityErr) {
-        const failureError = normalizeRunFailureError(availabilityErr);
-        if (runTracker) {
-          try {
-            await runTracker.fail(failureError);
-          } catch (trackerErr) {
-            console.error(`Failed to persist run ${runId} failure:`, trackerErr);
-          }
-        } else if (latest) {
-          await recordImmediateRunFailure({
-            runId,
-            script: latest,
-            triggeredBy: triggeredByLabel,
-            triggeredByUserId,
-            httpMethod,
-            input,
-            error: failureError,
-            codeVersion,
-          });
-        }
-
-        const isRunnerUnavailable =
-          availabilityErr instanceof RunnerUnavailableError ||
-          availabilityErr?.code === "NO_RUNNER_AVAILABLE";
-        const statusCode = isRunnerUnavailable
-          ? 503
-          : failureError.status || availabilityErr.status || 500;
-        const payload = {
-          error: failureError.message,
-        };
-        if (isRunnerUnavailable) {
-          payload.code = "runner_unavailable";
-        } else if (availabilityErr?.code) {
-          payload.code = availabilityErr.code;
-        }
-        res.status(statusCode).json(payload);
-        return;
-      }
-
-      let jobPromise;
-      try {
-        jobPromise = runJob(
-          {
-            ...latest,
-            preassignedRunId: runId,
-            triggeredBy: triggeredByLabel,
-            triggeredByUserId,
-            variables: executionVariables,
-            jobContext,
-          },
-          input,
-        );
-      } catch (dispatchErr) {
-        const failureError = normalizeRunFailureError(dispatchErr);
-        if (runTracker) {
-          try {
-            await runTracker.fail(failureError);
-          } catch (trackerErr) {
-            console.error(`Failed to persist run ${runId} failure:`, trackerErr);
-          }
-        } else if (latest) {
-          await recordImmediateRunFailure({
-            runId,
-            script: latest,
-            triggeredBy: triggeredByLabel,
-            triggeredByUserId,
-            httpMethod,
-            input,
-            error: failureError,
-            codeVersion,
-          });
-        }
-        if (
-          dispatchErr instanceof RunnerUnavailableError ||
-          dispatchErr?.code === "NO_RUNNER_AVAILABLE"
-        ) {
-          res.status(503).json({
-            error: failureError.message,
-            code: "runner_unavailable",
-          });
-          return;
-        }
-        throw dispatchErr;
-      }
-
-      jobPromise
-        .then(async (result) => {
-          if (runTracker) {
-            try {
-              await runTracker.complete(result);
-            } catch (trackerErr) {
-              console.error(`Failed to persist run ${runId} result:`, trackerErr);
-            }
-          }
-          await persistScriptNotifications(latest, result);
-        })
-        .catch(async (err2) => {
-          const failureError = normalizeRunFailureError(err2);
-          if (runTracker) {
-            try {
-              await runTracker.fail(failureError);
-            } catch (trackerErr) {
-              console.error(`Failed to persist run ${runId} failure:`, trackerErr);
-            }
-          } else if (latest) {
-            await recordImmediateRunFailure({
-              runId,
-              script: latest,
-              triggeredBy: triggeredByLabel,
-              triggeredByUserId,
-              httpMethod,
-              input,
-              error: failureError,
-              codeVersion,
-            });
-          }
-          if (
-            err2 instanceof RunnerUnavailableError ||
-            err2?.code === "NO_RUNNER_AVAILABLE"
-          ) {
-            console.error(`Job ${runId} failed to start:`, err2);
-          } else {
-            console.error(`Job ${runId} failed:`, err2);
-          }
-        });
-
-      const acceptedPayload = {
-        accepted: true,
-        message: `Script '${latest.name}' accepted for execution.`,
-      };
-      if (latest?.expose_run_id !== 0) {
-        acceptedPayload.runId = runId;
-      }
-
-      res.status(202).json(acceptedPayload);
-    } catch (err) {
-      const failureError = normalizeRunFailureError(err);
-      if (runTracker) {
-        try {
-          await runTracker.fail(failureError);
-        } catch (trackerErr) {
-          console.error(
-            `Failed to persist run ${runId || "unknown"} failure:`,
-            trackerErr,
-          );
-        }
-      } else if (latest) {
-        await recordImmediateRunFailure({
-          runId,
-          script: latest,
-          triggeredBy: triggeredByLabel,
-          triggeredByUserId,
-          httpMethod,
-          input,
-          error: failureError,
-          codeVersion,
-        });
-      }
-      if (
-        err instanceof RunnerUnavailableError ||
-        err?.code === "NO_RUNNER_AVAILABLE"
-      ) {
-        res.status(503).json({
-          error: failureError.message,
-          code: "runner_unavailable",
-        });
-        return;
-      }
-      if (failureError.status || err.status) {
-        res
-          .status(failureError.status || err.status)
-          .json({ error: failureError.message });
-        return;
-      }
-      console.error("Failed to queue job:", err);
-      res
-        .status(500)
-        .json(attachRunId(buildErrorPayload(failureError.message)));
-    }
-  };
-
-  // Sync runner (used by GET)
-  const runSync = async (req, res) => {
-    const httpMethod =
-      typeof req.method === "string" && req.method.trim()
-        ? req.method.trim().toUpperCase()
-        : "GET";
-    const input = req.query || {};
+  const runWithAutomnResponse = async ({ req, res, httpMethod, input }) => {
     let runTracker = null;
     const runId = uuidv4();
     let latest = null;
@@ -6027,6 +5754,294 @@ function registerScriptRoute(script) {
       console.error("Sync run failed:", err);
       res.status(500).json(attachRunId(buildErrorPayload(failureError.message)));
     }
+  };
+
+  // Async runner (used by POST)
+  const runAsync = async (req, res) => {
+    const httpMethod =
+      typeof req.method === "string" && req.method.trim()
+        ? req.method.trim().toUpperCase()
+        : "POST";
+    let parsedRequestBody;
+    try {
+      parsedRequestBody = await resolveRequestPayload(req);
+    } catch (bodyErr) {
+      console.error("Failed to read script request payload", bodyErr);
+      const statusCode = bodyErr.status || bodyErr.statusCode || 400;
+      res.status(statusCode).json({
+        error: bodyErr.message || "Failed to read request payload",
+        code: bodyErr.code || "invalid_payload",
+      });
+      return;
+    }
+
+    const input = parsedRequestBody === undefined ? {} : parsedRequestBody;
+    if (!isSchedulerSourceRequest(req)) {
+      await runWithAutomnResponse({ req, res, httpMethod, input });
+      return;
+    }
+    let runTracker = null;
+    const runId = uuidv4();
+    let latest = null;
+    let triggeredByLabel = "API";
+    let triggeredByUserId = null;
+
+    try {
+      const auth = await authenticateRequest(req);
+      const user = auth?.user || null;
+
+      const access = await ensureScriptAccess({
+        endpoint: script.endpoint,
+        user,
+        requiredPermission: user ? "run" : null,
+      });
+      latest = access.script;
+
+      triggeredByLabel = user?.username || "API";
+      triggeredByUserId = user?.id || null;
+
+      const codeVersion = await determineCodeVersionForScript(latest.id);
+
+      let tokenAccess;
+      try {
+        tokenAccess = evaluateScriptTokenAccess(req, latest, user);
+        if (tokenAccess.used) {
+          triggeredByLabel = `Token ${tokenAccess.masked}`;
+        }
+      } catch (tokenErr) {
+        const failureError = normalizeRunFailureError(tokenErr);
+        await recordImmediateRunFailure({
+          runId,
+          script: latest,
+          triggeredBy: triggeredByLabel,
+          triggeredByUserId,
+          httpMethod,
+          input,
+          error: failureError,
+          codeVersion,
+        });
+        res.status(tokenErr.status || failureError.status || 401).json({
+          error: failureError.message,
+          code: tokenErr.code || "unauthorized",
+        });
+        return;
+      }
+
+      const executionVariables = await loadScriptVariablesForExecution(latest);
+      const jobContext = {
+        httpMethod,
+        codeVersion,
+        scriptName:
+          typeof latest.name === "string" && latest.name.trim()
+            ? latest.name
+            : latest.endpoint || latest.id || "",
+      };
+
+      try {
+        runTracker = await createRunTracker({
+          runId,
+          script: latest,
+          triggeredBy: triggeredByLabel,
+          triggeredByUserId,
+          input,
+          httpMethod,
+          codeVersion,
+        });
+      } catch (trackerErr) {
+        console.error(`Failed to initialize run ${runId} tracker:`, trackerErr);
+      }
+
+      try {
+        await ensureHealthyRunnerAvailability(latest);
+      } catch (availabilityErr) {
+        const failureError = normalizeRunFailureError(availabilityErr);
+        if (runTracker) {
+          try {
+            await runTracker.fail(failureError);
+          } catch (trackerErr) {
+            console.error(`Failed to persist run ${runId} failure:`, trackerErr);
+          }
+        } else if (latest) {
+          await recordImmediateRunFailure({
+            runId,
+            script: latest,
+            triggeredBy: triggeredByLabel,
+            triggeredByUserId,
+            httpMethod,
+            input,
+            error: failureError,
+            codeVersion,
+          });
+        }
+
+        const isRunnerUnavailable =
+          availabilityErr instanceof RunnerUnavailableError ||
+          availabilityErr?.code === "NO_RUNNER_AVAILABLE";
+        const statusCode = isRunnerUnavailable
+          ? 503
+          : failureError.status || availabilityErr.status || 500;
+        const payload = {
+          error: failureError.message,
+        };
+        if (isRunnerUnavailable) {
+          payload.code = "runner_unavailable";
+        } else if (availabilityErr?.code) {
+          payload.code = availabilityErr.code;
+        }
+        res.status(statusCode).json(payload);
+        return;
+      }
+
+      let jobPromise;
+      try {
+        jobPromise = runJob(
+          {
+            ...latest,
+            preassignedRunId: runId,
+            triggeredBy: triggeredByLabel,
+            triggeredByUserId,
+            variables: executionVariables,
+            jobContext,
+          },
+          input,
+        );
+      } catch (dispatchErr) {
+        const failureError = normalizeRunFailureError(dispatchErr);
+        if (runTracker) {
+          try {
+            await runTracker.fail(failureError);
+          } catch (trackerErr) {
+            console.error(`Failed to persist run ${runId} failure:`, trackerErr);
+          }
+        } else if (latest) {
+          await recordImmediateRunFailure({
+            runId,
+            script: latest,
+            triggeredBy: triggeredByLabel,
+            triggeredByUserId,
+            httpMethod,
+            input,
+            error: failureError,
+            codeVersion,
+          });
+        }
+        if (
+          dispatchErr instanceof RunnerUnavailableError ||
+          dispatchErr?.code === "NO_RUNNER_AVAILABLE"
+        ) {
+          res.status(503).json({
+            error: failureError.message,
+            code: "runner_unavailable",
+          });
+          return;
+        }
+        throw dispatchErr;
+      }
+
+      jobPromise
+        .then(async (result) => {
+          if (runTracker) {
+            try {
+              await runTracker.complete(result);
+            } catch (trackerErr) {
+              console.error(`Failed to persist run ${runId} result:`, trackerErr);
+            }
+          }
+          await persistScriptNotifications(latest, result);
+        })
+        .catch(async (err2) => {
+          const failureError = normalizeRunFailureError(err2);
+          if (runTracker) {
+            try {
+              await runTracker.fail(failureError);
+            } catch (trackerErr) {
+              console.error(`Failed to persist run ${runId} failure:`, trackerErr);
+            }
+          } else if (latest) {
+            await recordImmediateRunFailure({
+              runId,
+              script: latest,
+              triggeredBy: triggeredByLabel,
+              triggeredByUserId,
+              httpMethod,
+              input,
+              error: failureError,
+              codeVersion,
+            });
+          }
+          if (
+            err2 instanceof RunnerUnavailableError ||
+            err2?.code === "NO_RUNNER_AVAILABLE"
+          ) {
+            console.error(`Job ${runId} failed to start:`, err2);
+          } else {
+            console.error(`Job ${runId} failed:`, err2);
+          }
+        });
+
+      const acceptedPayload = {
+        accepted: true,
+        message: `Script '${latest.name}' accepted for execution.`,
+      };
+      if (latest?.expose_run_id !== 0) {
+        acceptedPayload.runId = runId;
+      }
+
+      res.status(202).json(acceptedPayload);
+    } catch (err) {
+      const failureError = normalizeRunFailureError(err);
+      if (runTracker) {
+        try {
+          await runTracker.fail(failureError);
+        } catch (trackerErr) {
+          console.error(
+            `Failed to persist run ${runId || "unknown"} failure:`,
+            trackerErr,
+          );
+        }
+      } else if (latest) {
+        await recordImmediateRunFailure({
+          runId,
+          script: latest,
+          triggeredBy: triggeredByLabel,
+          triggeredByUserId,
+          httpMethod,
+          input,
+          error: failureError,
+          codeVersion,
+        });
+      }
+      if (
+        err instanceof RunnerUnavailableError ||
+        err?.code === "NO_RUNNER_AVAILABLE"
+      ) {
+        res.status(503).json({
+          error: failureError.message,
+          code: "runner_unavailable",
+        });
+        return;
+      }
+      if (failureError.status || err.status) {
+        res
+          .status(failureError.status || err.status)
+          .json({ error: failureError.message });
+        return;
+      }
+      console.error("Failed to queue job:", err);
+      res
+        .status(500)
+        .json(attachRunId(buildErrorPayload(failureError.message)));
+    }
+  };
+
+  // Sync runner (used by GET)
+  const runSync = async (req, res) => {
+    const httpMethod =
+      typeof req.method === "string" && req.method.trim()
+        ? req.method.trim().toUpperCase()
+        : "GET";
+    const input = req.query || {};
+    await runWithAutomnResponse({ req, res, httpMethod, input });
   };
 
   const guardedAsync = guardMethod(runAsync);

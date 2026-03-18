@@ -5,7 +5,7 @@ const path = require("path");
 const fs = require("fs");
 const os = require("os");
 const crypto = require("crypto");
-const { execFile } = require("child_process");
+const { execFile, spawn } = require("child_process");
 const {
   executeScript,
   LOG_MARKER,
@@ -32,6 +32,21 @@ const DEFAULT_HEARTBEAT_INTERVAL = 60_000;
 const MIN_SECRET_LENGTH = 12;
 const RUNNER_VERSION = "0.2.16";
 const MINIMUM_HOST_VERSION = "0.2.15";
+const RECOMMENDED_SYSTEM_PACKAGES = Object.freeze([
+  "chromium",
+  "curl",
+  "wget",
+  "git",
+  "zip",
+  "unzip",
+  "jq",
+  "ffmpeg",
+  "poppler-utils",
+  "default-mysql-client",
+  "sqlite3",
+  "postgresql-client",
+  "openssh-client",
+]);
 
 const runtimeExecutableEnv = {
   node: normalizeExecutableValue(process.env.AUTOMN_RUNNER_NODE_PATH || ""),
@@ -279,6 +294,275 @@ function parseInteger(value) {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+function execFileAsync(command, args = [], options = {}) {
+  return new Promise((resolve, reject) => {
+    execFile(command, args, options, (error, stdout, stderr) => {
+      if (error) {
+        error.stdout = stdout;
+        error.stderr = stderr;
+        reject(error);
+        return;
+      }
+      resolve({ stdout: stdout || "", stderr: stderr || "" });
+    });
+  });
+}
+
+function normalizePackageName(value) {
+  if (!value || typeof value !== "string") {
+    return "";
+  }
+  const normalized = value.trim().toLowerCase();
+  return /^[a-z0-9][a-z0-9+.-]*$/.test(normalized) ? normalized : "";
+}
+
+function normalizePackageList(input) {
+  if (!Array.isArray(input)) {
+    return [];
+  }
+  return Array.from(
+    new Set(
+      input
+        .map((value) => normalizePackageName(typeof value === "string" ? value : ""))
+        .filter(Boolean),
+    ),
+  );
+}
+
+function detectPackageManager() {
+  if (process.platform !== "linux") {
+    return null;
+  }
+  if (fs.existsSync("/usr/bin/apt-get") || fs.existsSync("/bin/apt-get")) {
+    return "apt";
+  }
+  return null;
+}
+
+function parseInstalledPackages(value) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value
+    .map((entry) => {
+      if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
+        return null;
+      }
+      const name = normalizePackageName(typeof entry.name === "string" ? entry.name : "");
+      if (!name) {
+        return null;
+      }
+      const paths = Array.isArray(entry.paths)
+        ? Array.from(
+            new Set(
+              entry.paths
+                .map((item) => (typeof item === "string" ? item.trim() : ""))
+                .filter(Boolean),
+            ),
+          )
+        : [];
+      return {
+        name,
+        version: typeof entry.version === "string" ? entry.version.trim() || null : null,
+        summary: typeof entry.summary === "string" ? entry.summary.trim() || null : null,
+        path: typeof entry.path === "string" ? entry.path.trim() || null : paths[0] || null,
+        paths,
+      };
+    })
+    .filter(Boolean)
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+function readDesiredPackages(state) {
+  return normalizePackageList(state?.desiredPackages);
+}
+
+function readInstalledPackages(state) {
+  return parseInstalledPackages(state?.installedPackages);
+}
+
+const packageManagerType = detectPackageManager();
+let packageInstallPromise = null;
+
+async function runAptCommand(args, { timeout = 0 } = {}) {
+  return new Promise((resolve, reject) => {
+    const child = spawn("apt-get", args, { stdio: ["ignore", "pipe", "pipe"] });
+    let stdout = "";
+    let stderr = "";
+    let settled = false;
+    let timer = null;
+
+    const finish = (err, result) => {
+      if (settled) return;
+      settled = true;
+      if (timer) clearTimeout(timer);
+      if (err) {
+        err.stdout = stdout;
+        err.stderr = stderr;
+        reject(err);
+        return;
+      }
+      resolve({ stdout, stderr, ...(result || {}) });
+    };
+
+    if (timeout > 0) {
+      timer = setTimeout(() => {
+        child.kill("SIGTERM");
+        finish(new Error(`apt-get ${args.join(" ")} timed out`));
+      }, timeout);
+    }
+
+    child.stdout.on("data", (chunk) => { stdout += chunk.toString(); });
+    child.stderr.on("data", (chunk) => { stderr += chunk.toString(); });
+    child.on("error", (err) => finish(err));
+    child.on("close", (code) => {
+      if (code === 0) {
+        finish(null, { code });
+      } else {
+        finish(new Error(`apt-get ${args.join(" ")} exited with code ${code}`));
+      }
+    });
+  });
+}
+
+async function getInstalledPackageDetails(packageNames = []) {
+  const normalizedPackages = normalizePackageList(packageNames);
+  if (!normalizedPackages.length || packageManagerType !== "apt") {
+    return [];
+  }
+
+  const details = [];
+  for (const packageName of normalizedPackages) {
+    try {
+      const { stdout: versionStdout } = await execFileAsync(
+        "dpkg-query",
+        ["-W", "-f=${Package}\t${Version}\n", packageName],
+        { timeout: 5000 },
+      );
+      const versionLine = versionStdout.trim().split(/\r?\n/).find(Boolean) || "";
+      if (!versionLine) {
+        continue;
+      }
+      const parts = versionLine.split("\t");
+      const version = parts[1] ? parts[1].trim() : null;
+
+      let summary = null;
+      try {
+        const { stdout: showStdout } = await execFileAsync("apt-cache", ["show", packageName], { timeout: 5000 });
+        const summaryLine = showStdout.split(/\r?\n/).find((line) => line.startsWith("Description: "));
+        summary = summaryLine ? summaryLine.replace("Description: ", "").trim() || null : null;
+      } catch (err) {
+        summary = null;
+      }
+
+      let paths = [];
+      try {
+        const { stdout: listStdout } = await execFileAsync("dpkg", ["-L", packageName], { timeout: 5000 });
+        paths = Array.from(
+          new Set(
+            listStdout
+              .split(/\r?\n/)
+              .map((line) => line.trim())
+              .filter((line) => line.startsWith("/usr/bin/") || line.startsWith("/usr/local/bin/") || line.startsWith("/bin/")),
+          ),
+        ).slice(0, 8);
+      } catch (err) {
+        paths = [];
+      }
+
+      details.push({
+        name: packageName,
+        version: version || null,
+        summary,
+        path: paths[0] || null,
+        paths,
+      });
+    } catch (err) {
+      // Ignore packages that are not currently installed.
+    }
+  }
+
+  return details.sort((a, b) => a.name.localeCompare(b.name));
+}
+
+async function refreshInstalledPackages() {
+  const desiredPackages = readDesiredPackages(persistedState);
+  const installedPackages = await getInstalledPackageDetails(desiredPackages);
+  persistedState.installedPackages = installedPackages;
+  persistState();
+  return installedPackages;
+}
+
+async function installDesiredPackages(packageNames) {
+  const normalizedPackages = normalizePackageList(packageNames);
+  if (!normalizedPackages.length) {
+    return {
+      packageManager: packageManagerType,
+      desiredPackages: readDesiredPackages(persistedState),
+      installedPackages: readInstalledPackages(persistedState),
+      changed: false,
+    };
+  }
+  if (packageManagerType !== "apt") {
+    throw new Error("Persistent package installs are currently supported only on Linux runners with apt.");
+  }
+
+  const mergedDesired = Array.from(new Set([...readDesiredPackages(persistedState), ...normalizedPackages]));
+  persistedState.desiredPackages = mergedDesired;
+  persistState();
+
+  if (!packageInstallPromise) {
+    packageInstallPromise = (async () => {
+      await runAptCommand(["update"], { timeout: 120000 });
+      await runAptCommand(["install", "-y", "--no-install-recommends", ...mergedDesired], { timeout: 300000 });
+      const installedPackages = await getInstalledPackageDetails(mergedDesired);
+      persistedState.installedPackages = installedPackages;
+      persistState();
+      return installedPackages;
+    })();
+  }
+
+  try {
+    const installedPackages = await packageInstallPromise;
+    return {
+      packageManager: packageManagerType,
+      desiredPackages: mergedDesired,
+      installedPackages,
+      changed: true,
+    };
+  } finally {
+    packageInstallPromise = null;
+  }
+}
+
+async function searchAptPackages(query) {
+  if (packageManagerType !== "apt") {
+    return [];
+  }
+  const normalizedQuery = typeof query === "string" ? query.trim() : "";
+  if (!normalizedQuery) {
+    return [];
+  }
+  const { stdout } = await execFileAsync("apt-cache", ["search", "--names-only", normalizedQuery], { timeout: 10000, maxBuffer: 1024 * 1024 * 4 });
+  return stdout
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .slice(0, 25)
+    .map((line) => {
+      const [namePart, ...rest] = line.split(" - ");
+      const name = normalizePackageName(namePart || "");
+      if (!name) {
+        return null;
+      }
+      return {
+        name,
+        summary: rest.join(" - ").trim() || null,
+      };
+    })
+    .filter(Boolean);
+}
+
 function normalizeUrl(value) {
   if (Array.isArray(value)) {
     if (!value.length) return "";
@@ -419,6 +703,8 @@ function writeStateToDisk(file, payload) {
 }
 
 const persistedState = config.stateFile ? readStateFromDisk(config.stateFile) : {};
+persistedState.desiredPackages = readDesiredPackages(persistedState);
+persistedState.installedPackages = readInstalledPackages(persistedState);
 if (inMemoryState.secretSource === "state" && persistedState.secret) {
   inMemoryState.secret = persistedState.secret;
 }
@@ -489,6 +775,8 @@ function persistState() {
         acc[key] = config.runtimeExecutables[key] || null;
         return acc;
       }, {}),
+      desiredPackages: readDesiredPackages(persistedState),
+      installedPackages: readInstalledPackages(persistedState),
     };
     writeStateToDisk(config.stateFile, payload);
     return;
@@ -512,6 +800,8 @@ function persistState() {
       acc[key] = config.runtimeExecutables[key] || null;
       return acc;
     }, {}),
+    desiredPackages: readDesiredPackages(persistedState),
+    installedPackages: readInstalledPackages(persistedState),
   };
   writeStateToDisk(config.stateFile, payload);
 }
@@ -625,6 +915,23 @@ function refreshRuntimeDetections() {
   }
 }
 
+async function ensureDesiredSystemPackages() {
+  if (packageManagerType !== "apt") {
+    return;
+  }
+
+  const desiredPackages = readDesiredPackages(persistedState);
+  if (!desiredPackages.length) {
+    return;
+  }
+
+  try {
+    await installDesiredPackages(desiredPackages);
+  } catch (err) {
+    console.error("[runner] Failed to re-install persisted apt packages", err);
+  }
+}
+
 async function ensureDirectories() {
   const targetDirs = [config.scriptsDir, config.workdirDir, path.dirname(config.stateFile || "")];
   await Promise.all(
@@ -723,6 +1030,9 @@ function buildRegistrationPayload() {
   if (config.timeoutMs !== null) {
     payload.body.timeoutMs = config.timeoutMs;
   }
+  payload.body.packageManager = packageManagerType;
+  payload.body.desiredPackages = readDesiredPackages(persistedState);
+  payload.body.installedPackages = readInstalledPackages(persistedState);
   return payload;
 }
 
@@ -861,8 +1171,77 @@ app.get("/status", (req, res) => {
       scriptsDir: config.scriptsDir,
       workdirDir: config.workdirDir,
       secretManagedByEnv: !secretIsConfigurable(),
+      packageManager: packageManagerType,
+      desiredPackages: readDesiredPackages(persistedState),
     },
   });
+});
+
+function requireRunnerSecret(req, res) {
+  const requestSecret = normalizeUrl(req.headers["x-automn-runner-secret"]);
+  const configuredSecret = getSecret();
+  if (!configuredSecret || requestSecret !== configuredSecret) {
+    res.status(401).json({ error: "Invalid runner secret" });
+    return false;
+  }
+  return true;
+}
+
+app.get("/api/system/packages", (req, res) => {
+  if (!requireRunnerSecret(req, res)) {
+    return;
+  }
+  res.json({
+    packageManager: packageManagerType,
+    supported: packageManagerType === "apt",
+    desiredPackages: readDesiredPackages(persistedState),
+    installedPackages: readInstalledPackages(persistedState),
+    recommendedPackages: RECOMMENDED_SYSTEM_PACKAGES,
+  });
+});
+
+app.get("/api/system/packages/search", async (req, res) => {
+  if (!requireRunnerSecret(req, res)) {
+    return;
+  }
+  if (packageManagerType !== "apt") {
+    res.status(400).json({ error: "Runner does not support apt package installation." });
+    return;
+  }
+
+  const query = typeof req.query?.q === "string" ? req.query.q.trim() : "";
+  if (!query) {
+    res.status(400).json({ error: "Search query is required" });
+    return;
+  }
+
+  try {
+    const results = await searchAptPackages(query);
+    res.json({ results });
+  } catch (err) {
+    console.error("[runner] Failed to search apt packages", err);
+    res.status(500).json({ error: err?.message || "Failed to search apt packages" });
+  }
+});
+
+app.post("/api/system/packages/install", async (req, res) => {
+  if (!requireRunnerSecret(req, res)) {
+    return;
+  }
+
+  const packages = normalizePackageList(Array.isArray(req.body?.packages) ? req.body.packages : []);
+  if (!packages.length) {
+    res.status(400).json({ error: "At least one package is required" });
+    return;
+  }
+
+  try {
+    const result = await installDesiredPackages(packages);
+    res.json(result);
+  } catch (err) {
+    console.error("[runner] Failed to install apt packages", err);
+    res.status(500).json({ error: err?.stderr || err?.message || "Failed to install apt packages" });
+  }
 });
 
 function renderPage({ title, body }) {

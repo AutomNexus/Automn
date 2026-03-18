@@ -946,6 +946,36 @@ function safeSerializeInput(value) {
   }
 }
 
+function normalizeRequestQueryInput(req) {
+  if (!req?.query || typeof req.query !== "object") {
+    return {};
+  }
+  return req.query;
+}
+
+function mergeScriptInputFromRequest(req, payload) {
+  const queryInput = normalizeRequestQueryInput(req);
+  const hasQueryInput = Object.keys(queryInput).length > 0;
+
+  if (payload === undefined) {
+    return hasQueryInput ? queryInput : {};
+  }
+
+  if (
+    payload &&
+    typeof payload === "object" &&
+    !Array.isArray(payload) &&
+    hasQueryInput
+  ) {
+    return {
+      ...queryInput,
+      ...payload,
+    };
+  }
+
+  return payload;
+}
+
 async function determineCodeVersionForScript(scriptId) {
   if (!scriptId) return 1;
   try {
@@ -5775,7 +5805,7 @@ function registerScriptRoute(script) {
       return;
     }
 
-    const input = parsedRequestBody === undefined ? {} : parsedRequestBody;
+    const input = mergeScriptInputFromRequest(req, parsedRequestBody);
     if (!isSchedulerSourceRequest(req)) {
       await runWithAutomnResponse({ req, res, httpMethod, input });
       return;
@@ -6040,7 +6070,7 @@ function registerScriptRoute(script) {
       typeof req.method === "string" && req.method.trim()
         ? req.method.trim().toUpperCase()
         : "GET";
-    const input = req.query || {};
+    const input = mergeScriptInputFromRequest(req, undefined);
     await runWithAutomnResponse({ req, res, httpMethod, input });
   };
 

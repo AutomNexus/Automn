@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
+import { apiRequest } from "../utils/api";
+import { useNotificationDialog } from "./NotificationDialogProvider";
 
 const RUNNER_RECOMMENDED_PACKAGES = [
   "chromium",
@@ -15,8 +17,6 @@ const RUNNER_RECOMMENDED_PACKAGES = [
   "postgresql-client",
   "openssh-client",
 ];
-import { apiRequest } from "../utils/api";
-import { useNotificationDialog } from "./NotificationDialogProvider";
 
 const initialFormState = {
   id: "",
@@ -829,7 +829,7 @@ export default function SettingsRunnerHosts({ onAuthError }) {
   return (
     <div className="space-y-6">
       {!isCreateOpen && (
-        <div className="flex justify-end">
+        <div className="relative z-10 flex justify-end">
           <button
             type="button"
             onClick={() => {

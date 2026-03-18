@@ -37,6 +37,26 @@ The host no longer embeds an execution engine—every script runs on a registere
 
 Log frames are forwarded verbatim; the final `result` payload includes `runId`, `stdout`, `stderr`, `code`, `duration`, `returnData`, `automnLogs`, `automnNotifications`, and the original `input`.
 
+`AutomnReturn(...)` still accepts ordinary JSON-serializable values, but it can now also return typed HTTP response descriptors for `/s/<endpoint>` calls. Supported descriptor types are:
+- `json` → send a JSON body directly
+- `text` → send plain text
+- `html` → send HTML
+- `redirect` → set `Location` and return the provided redirect status
+- `binary` → decode a base64 payload and stream it with your chosen headers
+- `empty` → send no body
+
+Example Node.js responses:
+```js
+AutomnReturn({ type: "redirect", status: 302, location: "https://example.com" });
+AutomnReturn({ type: "text", body: "Plain-text response" });
+AutomnReturn({
+  type: "binary",
+  headers: { "Content-Type": "application/pdf" },
+  downloadName: "report.pdf",
+  base64: Buffer.from("hello world").toString("base64"),
+});
+```
+
 Use `AutomnLog` to emit structured entries with an optional **type** to categorize events beyond success/error. For example, `AutomnLog("Token missing", "warn", { "area": "login" }, "authentication")` creates an authentication-focused log entry that surfaces separately from general run logs.
 
 ## Environment variables

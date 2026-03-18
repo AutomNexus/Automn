@@ -4,8 +4,16 @@ import { apiRequest } from "../utils/api";
 
 const NODE_SNIPPETS = [
   {
-    label: "AutomnReturn (success)",
+    label: "AutomnReturn (JSON)",
     value: "AutomnReturn({ success: true, data: null });\n",
+  },
+  {
+    label: "AutomnReturn (redirect)",
+    value: "AutomnReturn({ type: \"redirect\", status: 302, location: \"https://example.com\" });\n",
+  },
+  {
+    label: "AutomnReturn (text)",
+    value: "AutomnReturn({ type: \"text\", body: \"Plain-text response\" });\n",
   },
   {
     label: "AutomnLog (info)",
@@ -35,8 +43,16 @@ const NODE_SNIPPETS = [
 
 const PYTHON_SNIPPETS = [
   {
-    label: "AutomnReturn (success)",
+    label: "AutomnReturn (JSON)",
     value: "AutomnReturn({\"success\": True, \"data\": None})\n",
+  },
+  {
+    label: "AutomnReturn (redirect)",
+    value: "AutomnReturn({\"type\": \"redirect\", \"status\": 302, \"location\": \"https://example.com\"})\n",
+  },
+  {
+    label: "AutomnReturn (text)",
+    value: "AutomnReturn({\"type\": \"text\", \"body\": \"Plain-text response\"})\n",
   },
   {
     label: "AutomnLog (info)",
@@ -66,8 +82,16 @@ const PYTHON_SNIPPETS = [
 
 const POWERSHELL_SNIPPETS = [
   {
-    label: "AutomnReturn (success)",
+    label: "AutomnReturn (JSON)",
     value: "AutomnReturn(@{ success = $true; data = $null })\n",
+  },
+  {
+    label: "AutomnReturn (redirect)",
+    value: "AutomnReturn(@{ type = \"redirect\"; status = 302; location = \"https://example.com\" })\n",
+  },
+  {
+    label: "AutomnReturn (text)",
+    value: "AutomnReturn(@{ type = \"text\"; body = \"Plain-text response\" })\n",
   },
   {
     label: "AutomnLog (info)",
@@ -97,8 +121,16 @@ const POWERSHELL_SNIPPETS = [
 
 const SHELL_SNIPPETS = [
   {
-    label: "AutomnReturn (success)",
+    label: "AutomnReturn (JSON)",
     value: "AutomnReturn '{\"success\":true,\"data\":null}'\n",
+  },
+  {
+    label: "AutomnReturn (redirect)",
+    value: "AutomnReturn '{\"type\":\"redirect\",\"status\":302,\"location\":\"https://example.com\"}'\n",
+  },
+  {
+    label: "AutomnReturn (text)",
+    value: "AutomnReturn '{\"type\":\"text\",\"body\":\"Plain-text response\"}'\n",
   },
   {
     label: "AutomnLog (info)",

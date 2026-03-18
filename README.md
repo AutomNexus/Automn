@@ -136,6 +136,21 @@ AutomnLog("Testing if " + process.env.AUTOMN_JOB_VAR_TARGET_RUNNER + " will run 
 AutomnReturn({ success: true, message: "That couldn't have gone any better!" });
 ```
 
+`AutomnReturn` also supports typed HTTP responses when you need something other than the default JSON wrapper. For example:
+
+```js
+AutomnReturn({ type: "redirect", status: 302, location: "https://example.com" });
+AutomnReturn({ type: "text", body: "Plain-text response" });
+AutomnReturn({
+  type: "binary",
+  headers: {
+    "Content-Type": "application/pdf",
+  },
+  downloadName: "report.pdf",
+  base64: Buffer.from("hello world").toString("base64"),
+});
+```
+
 - Select **Run Script**, leave it as is (POST is fine) and click **RUN SCRIPT** or browse to: http://<Automn Host IP>:8088/s/test-endpoint to trigger the script
 - Check the analytics tab, you should see a success posting with a return payload of:
 

@@ -935,6 +935,176 @@ async function resolveRequestPayload(req) {
   return text;
 }
 
+function isPlainObject(value) {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+const AUTOMN_HTTP_RESPONSE_TYPES = new Set(["json", "text", "html", "redirect", "binary", "empty"]);
+const AUTOMN_BLOCKED_RESPONSE_HEADERS = new Set([
+  "connection",
+  "content-length",
+  "date",
+  "keep-alive",
+  "transfer-encoding",
+]);
+
+function normalizeAutomnResponseHeaders(headers) {
+  if (!isPlainObject(headers)) {
+    return {};
+  }
+
+  const normalized = {};
+  for (const [rawKey, rawValue] of Object.entries(headers)) {
+    const key = typeof rawKey === "string" ? rawKey.trim() : "";
+    if (!key) continue;
+
+    const lowerKey = key.toLowerCase();
+    if (AUTOMN_BLOCKED_RESPONSE_HEADERS.has(lowerKey)) {
+      continue;
+    }
+
+    if (rawValue === undefined || rawValue === null) {
+      continue;
+    }
+
+    normalized[key] = Array.isArray(rawValue)
+      ? rawValue.map((value) => String(value))
+      : String(rawValue);
+  }
+
+  return normalized;
+}
+
+function normalizeAutomnHttpResponseDescriptor(value) {
+  if (!isPlainObject(value)) {
+    return null;
+  }
+
+  const type = typeof value.type === "string" ? value.type.trim().toLowerCase() : "";
+  if (!AUTOMN_HTTP_RESPONSE_TYPES.has(type)) {
+    return null;
+  }
+
+  const numericStatus = Number.parseInt(value.status, 10);
+  const status = Number.isInteger(numericStatus) && numericStatus >= 100 && numericStatus <= 999
+    ? numericStatus
+    : type === "redirect"
+      ? 302
+      : type === "empty"
+        ? 204
+        : 200;
+  const headers = normalizeAutomnResponseHeaders(value.headers);
+
+  if (type === "redirect") {
+    const location = typeof value.location === "string" && value.location.trim()
+      ? value.location.trim()
+      : typeof value.url === "string" && value.url.trim()
+        ? value.url.trim()
+        : "";
+    if (!location) {
+      return {
+        invalid: true,
+        message: "AutomnReturn redirect responses require a non-empty location",
+      };
+    }
+    return { type, status, headers, location };
+  }
+
+  if (type === "binary") {
+    const base64 = typeof value.base64 === "string" ? value.base64.trim() : "";
+    if (!base64) {
+      return {
+        invalid: true,
+        message: "AutomnReturn binary responses require a base64 payload",
+      };
+    }
+
+    let body;
+    try {
+      body = Buffer.from(base64, "base64");
+    } catch (err) {
+      return {
+        invalid: true,
+        message: `AutomnReturn binary payload could not be decoded: ${err.message}`,
+      };
+    }
+
+    if (!headers["Content-Type"] && !headers["content-type"]) {
+      headers["Content-Type"] = "application/octet-stream";
+    }
+    if (typeof value.downloadName === "string" && value.downloadName.trim()) {
+      headers["Content-Disposition"] = `attachment; filename="${value.downloadName.trim().replace(/"/g, "")}"`;
+    }
+
+    return { type, status, headers, body };
+  }
+
+  if (type === "empty") {
+    return { type, status, headers, body: "" };
+  }
+
+  const body = Object.prototype.hasOwnProperty.call(value, "body") ? value.body : null;
+
+  if (type === "json") {
+    return { type, status, headers, body };
+  }
+
+  const normalizedBody = body === null || body === undefined
+    ? ""
+    : typeof body === "string"
+      ? body
+      : String(body);
+
+  if (type === "html" && !headers["Content-Type"] && !headers["content-type"]) {
+    headers["Content-Type"] = "text/html; charset=utf-8";
+  }
+  if (type === "text" && !headers["Content-Type"] && !headers["content-type"]) {
+    headers["Content-Type"] = "text/plain; charset=utf-8";
+  }
+
+  return { type, status, headers, body: normalizedBody };
+}
+
+function sendAutomnHttpResponse(res, descriptor, runId = null) {
+  if (!descriptor || descriptor.invalid) {
+    return false;
+  }
+
+  res.status(descriptor.status || 200);
+
+  if (runId) {
+    res.set("X-Automn-Run-Id", runId);
+  }
+
+  for (const [key, value] of Object.entries(descriptor.headers || {})) {
+    res.set(key, value);
+  }
+
+  if (descriptor.type === "redirect") {
+    res.set("Location", descriptor.location);
+    res.send();
+    return true;
+  }
+
+  if (descriptor.type === "json") {
+    res.json(descriptor.body);
+    return true;
+  }
+
+  if (descriptor.type === "binary") {
+    res.send(descriptor.body);
+    return true;
+  }
+
+  if (descriptor.type === "empty") {
+    res.send();
+    return true;
+  }
+
+  res.send(descriptor.body);
+  return true;
+}
+
 function safeSerializeInput(value) {
   try {
     return JSON.stringify(value ?? {});
@@ -5698,6 +5868,24 @@ function registerScriptRoute(script) {
       await persistScriptNotifications(latest, result);
       const statusCode = result.code === 0 ? 200 : 500;
       const includeMetadata = shouldIncludeMetadata();
+      const resolvedRunId = result.runId || runId;
+      const automnHttpResponse = result.code === 0
+        ? normalizeAutomnHttpResponseDescriptor(result.returnData)
+        : null;
+
+      if (automnHttpResponse?.invalid) {
+        res.status(500).json(attachRunId(buildErrorPayload(automnHttpResponse.message), resolvedRunId));
+        return;
+      }
+
+      if (automnHttpResponse) {
+        sendAutomnHttpResponse(
+          res,
+          automnHttpResponse,
+          shouldIncludeRunId() ? resolvedRunId : null,
+        );
+        return;
+      }
 
       if (includeMetadata) {
         const metadataPayload = {
@@ -5710,7 +5898,6 @@ function registerScriptRoute(script) {
           input: result.input ?? input,
           durationMs: Date.now() - start,
         };
-        const resolvedRunId = result.runId || runId;
         if (shouldIncludeRunId() && resolvedRunId) {
           metadataPayload.runId = resolvedRunId;
         }
@@ -5721,7 +5908,6 @@ function registerScriptRoute(script) {
       if (result.code === 0) {
         const minimalPayload = { return: result.returnData };
         if (shouldIncludeRunId()) {
-          const resolvedRunId = result.runId || runId;
           if (resolvedRunId) {
             minimalPayload.runId = resolvedRunId;
           }

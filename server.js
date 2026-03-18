@@ -980,6 +980,13 @@ function normalizeAutomnHttpResponseDescriptor(value) {
     return null;
   }
 
+  if (Object.prototype.hasOwnProperty.call(value, "return")) {
+    const nestedDescriptor = normalizeAutomnHttpResponseDescriptor(value.return);
+    if (nestedDescriptor) {
+      return nestedDescriptor;
+    }
+  }
+
   const type = typeof value.type === "string" ? value.type.trim().toLowerCase() : "";
   if (!AUTOMN_HTTP_RESPONSE_TYPES.has(type)) {
     return null;

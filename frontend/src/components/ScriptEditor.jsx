@@ -2,169 +2,246 @@ import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import Editor from "@monaco-editor/react";
 import { apiRequest } from "../utils/api";
 
-const NODE_SNIPPETS = [
-  {
-    label: "AutomnReturn (JSON)",
-    value: "AutomnReturn({ success: true, data: null });\n",
-  },
-  {
-    label: "AutomnReturn (redirect)",
-    value: "AutomnReturn({ type: \"redirect\", status: 302, location: \"https://example.com\" });\n",
-  },
-  {
-    label: "AutomnReturn (text)",
-    value: "AutomnReturn({ type: \"text\", body: \"Plain-text response\" });\n",
-  },
-  {
-    label: "AutomnLog (info)",
-    value: "AutomnLog(\"Starting process\", \"info\");\n",
-  },
-  {
-    label: "AutomnLog (warn)",
-    value: "AutomnLog(\"User not found\", \"warn\");\n",
-  },
-  {
-    label: "AutomnLog (error)",
-    value: "AutomnLog(\"Critical failure\", \"error\");\n",
-  },
-  {
-    label: "AutomnLog (authentication)",
-    value: "AutomnLog(\"Token missing\", \"warn\", { area: \"login\" }, \"authentication\");\n",
-  },
-  {
-    label: "AutomnRunLog",
-    value: "AutomnRunLog(\"Debug info\", { context: \"runner\" });\n",
-  },
-  {
-    label: "AutomnNotify (Admins)",
-    value: "AutomnNotify(\"Admins\", \"Deployment completed\", \"info\");\n",
-  },
+const createSnippetGroup = (groupLabel, options) => ({
+  groupLabel,
+  options,
+});
+
+const NODE_SNIPPET_GROUPS = [
+  createSnippetGroup("AutomnReturn", [
+    {
+      label: "JSON",
+      value: "AutomnReturn({ success: true, data: null });\n",
+    },
+    {
+      label: "Redirect",
+      value: "AutomnReturn({ type: \"redirect\", status: 302, location: \"https://example.com\" });\n",
+    },
+    {
+      label: "Text",
+      value: "AutomnReturn({ type: \"text\", body: \"Plain-text response\" });\n",
+    },
+    {
+      label: "HTML",
+      value: "AutomnReturn({ type: \"html\", body: \"<h1>Hello from Automn</h1>\" });\n",
+    },
+    {
+      label: "Binary download",
+      value: "AutomnReturn({\n  type: \"binary\",\n  headers: {\n    \"Content-Type\": \"application/pdf\",\n  },\n  downloadName: \"report.pdf\",\n  base64: Buffer.from(\"hello world\").toString(\"base64\"),\n});\n",
+    },
+    {
+      label: "Empty",
+      value: "AutomnReturn({ type: \"empty\", status: 204 });\n",
+    },
+  ]),
+  createSnippetGroup("Logging", [
+    {
+      label: "Info log",
+      value: "AutomnLog(\"Starting process\", \"info\");\n",
+    },
+    {
+      label: "Warn log",
+      value: "AutomnLog(\"User not found\", \"warn\");\n",
+    },
+    {
+      label: "Error log",
+      value: "AutomnLog(\"Critical failure\", \"error\");\n",
+    },
+    {
+      label: "Authentication log",
+      value: "AutomnLog(\"Token missing\", \"warn\", { area: \"login\" }, \"authentication\");\n",
+    },
+    {
+      label: "Run log",
+      value: "AutomnRunLog(\"Debug info\", { context: \"runner\" });\n",
+    },
+  ]),
+  createSnippetGroup("Notifications", [
+    {
+      label: "Notify admins",
+      value: "AutomnNotify(\"Admins\", \"Deployment completed\", \"info\");\n",
+    },
+  ]),
 ];
 
-const PYTHON_SNIPPETS = [
-  {
-    label: "AutomnReturn (JSON)",
-    value: "AutomnReturn({\"success\": True, \"data\": None})\n",
-  },
-  {
-    label: "AutomnReturn (redirect)",
-    value: "AutomnReturn({\"type\": \"redirect\", \"status\": 302, \"location\": \"https://example.com\"})\n",
-  },
-  {
-    label: "AutomnReturn (text)",
-    value: "AutomnReturn({\"type\": \"text\", \"body\": \"Plain-text response\"})\n",
-  },
-  {
-    label: "AutomnLog (info)",
-    value: "AutomnLog(\"Starting process\", \"info\")\n",
-  },
-  {
-    label: "AutomnLog (warn)",
-    value: "AutomnLog(\"User not found\", \"warn\")\n",
-  },
-  {
-    label: "AutomnLog (error)",
-    value: "AutomnLog(\"Critical failure\", \"error\")\n",
-  },
-  {
-    label: "AutomnLog (authentication)",
-    value: "AutomnLog(\"Token missing\", \"warn\", {\"area\": \"login\"}, \"authentication\")\n",
-  },
-  {
-    label: "AutomnRunLog",
-    value: "AutomnRunLog(\"Debug info\", {\"context\": \"runner\"})\n",
-  },
-  {
-    label: "AutomnNotify (Admins)",
-    value: "AutomnNotify(\"Admins\", \"Deployment completed\", \"info\")\n",
-  },
+const PYTHON_SNIPPET_GROUPS = [
+  createSnippetGroup("AutomnReturn", [
+    {
+      label: "JSON",
+      value: "AutomnReturn({\"success\": True, \"data\": None})\n",
+    },
+    {
+      label: "Redirect",
+      value: "AutomnReturn({\"type\": \"redirect\", \"status\": 302, \"location\": \"https://example.com\"})\n",
+    },
+    {
+      label: "Text",
+      value: "AutomnReturn({\"type\": \"text\", \"body\": \"Plain-text response\"})\n",
+    },
+    {
+      label: "HTML",
+      value: "AutomnReturn({\"type\": \"html\", \"body\": \"<h1>Hello from Automn</h1>\"})\n",
+    },
+    {
+      label: "Binary download",
+      value: "import base64\nAutomnReturn({\n  \"type\": \"binary\",\n  \"headers\": {\n    \"Content-Type\": \"application/pdf\"\n  },\n  \"downloadName\": \"report.pdf\",\n  \"base64\": base64.b64encode(b\"hello world\").decode(\"utf-8\")\n})\n",
+    },
+    {
+      label: "Empty",
+      value: "AutomnReturn({\"type\": \"empty\", \"status\": 204})\n",
+    },
+  ]),
+  createSnippetGroup("Logging", [
+    {
+      label: "Info log",
+      value: "AutomnLog(\"Starting process\", \"info\")\n",
+    },
+    {
+      label: "Warn log",
+      value: "AutomnLog(\"User not found\", \"warn\")\n",
+    },
+    {
+      label: "Error log",
+      value: "AutomnLog(\"Critical failure\", \"error\")\n",
+    },
+    {
+      label: "Authentication log",
+      value: "AutomnLog(\"Token missing\", \"warn\", {\"area\": \"login\"}, \"authentication\")\n",
+    },
+    {
+      label: "Run log",
+      value: "AutomnRunLog(\"Debug info\", {\"context\": \"runner\"})\n",
+    },
+  ]),
+  createSnippetGroup("Notifications", [
+    {
+      label: "Notify admins",
+      value: "AutomnNotify(\"Admins\", \"Deployment completed\", \"info\")\n",
+    },
+  ]),
 ];
 
-const POWERSHELL_SNIPPETS = [
-  {
-    label: "AutomnReturn (JSON)",
-    value: "AutomnReturn(@{ success = $true; data = $null })\n",
-  },
-  {
-    label: "AutomnReturn (redirect)",
-    value: "AutomnReturn(@{ type = \"redirect\"; status = 302; location = \"https://example.com\" })\n",
-  },
-  {
-    label: "AutomnReturn (text)",
-    value: "AutomnReturn(@{ type = \"text\"; body = \"Plain-text response\" })\n",
-  },
-  {
-    label: "AutomnLog (info)",
-    value: "AutomnLog \"Starting process\" \"info\"\n",
-  },
-  {
-    label: "AutomnLog (warn)",
-    value: "AutomnLog \"User not found\" \"warn\"\n",
-  },
-  {
-    label: "AutomnLog (error)",
-    value: "AutomnLog \"Critical failure\" \"error\"\n",
-  },
-  {
-    label: "AutomnLog (authentication)",
-    value: "AutomnLog \"Token missing\" \"warn\" @{ area = \"login\" } \"authentication\"\n",
-  },
-  {
-    label: "AutomnRunLog",
-    value: "AutomnRunLog \"Debug info\" @{ context = \"runner\" }\n",
-  },
-  {
-    label: "AutomnNotify (Admins)",
-    value: "AutomnNotify \"Admins\" \"Deployment completed\" \"info\"\n",
-  },
+const POWERSHELL_SNIPPET_GROUPS = [
+  createSnippetGroup("AutomnReturn", [
+    {
+      label: "JSON",
+      value: "AutomnReturn(@{ success = $true; data = $null })\n",
+    },
+    {
+      label: "Redirect",
+      value: "AutomnReturn(@{ type = \"redirect\"; status = 302; location = \"https://example.com\" })\n",
+    },
+    {
+      label: "Text",
+      value: "AutomnReturn(@{ type = \"text\"; body = \"Plain-text response\" })\n",
+    },
+    {
+      label: "HTML",
+      value: "AutomnReturn(@{ type = \"html\"; body = \"<h1>Hello from Automn</h1>\" })\n",
+    },
+    {
+      label: "Binary download",
+      value: "$bytes = [System.Text.Encoding]::UTF8.GetBytes(\"hello world\")\n$base64 = [System.Convert]::ToBase64String($bytes)\nAutomnReturn(@{\n  type = \"binary\"\n  headers = @{ \"Content-Type\" = \"application/pdf\" }\n  downloadName = \"report.pdf\"\n  base64 = $base64\n})\n",
+    },
+    {
+      label: "Empty",
+      value: "AutomnReturn(@{ type = \"empty\"; status = 204 })\n",
+    },
+  ]),
+  createSnippetGroup("Logging", [
+    {
+      label: "Info log",
+      value: "AutomnLog \"Starting process\" \"info\"\n",
+    },
+    {
+      label: "Warn log",
+      value: "AutomnLog \"User not found\" \"warn\"\n",
+    },
+    {
+      label: "Error log",
+      value: "AutomnLog \"Critical failure\" \"error\"\n",
+    },
+    {
+      label: "Authentication log",
+      value: "AutomnLog \"Token missing\" \"warn\" @{ area = \"login\" } \"authentication\"\n",
+    },
+    {
+      label: "Run log",
+      value: "AutomnRunLog \"Debug info\" @{ context = \"runner\" }\n",
+    },
+  ]),
+  createSnippetGroup("Notifications", [
+    {
+      label: "Notify admins",
+      value: "AutomnNotify \"Admins\" \"Deployment completed\" \"info\"\n",
+    },
+  ]),
 ];
 
-const SHELL_SNIPPETS = [
-  {
-    label: "AutomnReturn (JSON)",
-    value: "AutomnReturn '{\"success\":true,\"data\":null}'\n",
-  },
-  {
-    label: "AutomnReturn (redirect)",
-    value: "AutomnReturn '{\"type\":\"redirect\",\"status\":302,\"location\":\"https://example.com\"}'\n",
-  },
-  {
-    label: "AutomnReturn (text)",
-    value: "AutomnReturn '{\"type\":\"text\",\"body\":\"Plain-text response\"}'\n",
-  },
-  {
-    label: "AutomnLog (info)",
-    value: "AutomnLog \"Starting process\" \"info\"\n",
-  },
-  {
-    label: "AutomnLog (warn)",
-    value: "AutomnLog \"User not found\" \"warn\"\n",
-  },
-  {
-    label: "AutomnLog (error)",
-    value: "AutomnLog \"Critical failure\" \"error\"\n",
-  },
-  {
-    label: "AutomnLog (authentication)",
-    value: "AutomnLog \"Token missing\" \"warn\" '{\"area\":\"login\"}' \"authentication\"\n",
-  },
-  {
-    label: "AutomnRunLog",
-    value: "AutomnRunLog \"Debug info\"\n",
-  },
-  {
-    label: "AutomnNotify (Admins)",
-    value: "AutomnNotify \"Admins\" \"Deployment completed\" \"info\"\n",
-  },
+const SHELL_SNIPPET_GROUPS = [
+  createSnippetGroup("AutomnReturn", [
+    {
+      label: "JSON",
+      value: "AutomnReturn '{\"success\":true,\"data\":null}'\n",
+    },
+    {
+      label: "Redirect",
+      value: "AutomnReturn '{\"type\":\"redirect\",\"status\":302,\"location\":\"https://example.com\"}'\n",
+    },
+    {
+      label: "Text",
+      value: "AutomnReturn '{\"type\":\"text\",\"body\":\"Plain-text response\"}'\n",
+    },
+    {
+      label: "HTML",
+      value: "AutomnReturn '{\"type\":\"html\",\"body\":\"<h1>Hello from Automn</h1>\"}'\n",
+    },
+    {
+      label: "Binary download",
+      value: "base64_payload=$(printf 'hello world' | base64 | tr -d '\\n')\nAutomnReturn \"{\\\"type\\\":\\\"binary\\\",\\\"headers\\\":{\\\"Content-Type\\\":\\\"application/pdf\\\"},\\\"downloadName\\\":\\\"report.pdf\\\",\\\"base64\\\":\\\"${base64_payload}\\\"}\"\n",
+    },
+    {
+      label: "Empty",
+      value: "AutomnReturn '{\"type\":\"empty\",\"status\":204}'\n",
+    },
+  ]),
+  createSnippetGroup("Logging", [
+    {
+      label: "Info log",
+      value: "AutomnLog \"Starting process\" \"info\"\n",
+    },
+    {
+      label: "Warn log",
+      value: "AutomnLog \"User not found\" \"warn\"\n",
+    },
+    {
+      label: "Error log",
+      value: "AutomnLog \"Critical failure\" \"error\"\n",
+    },
+    {
+      label: "Authentication log",
+      value: "AutomnLog \"Token missing\" \"warn\" '{\"area\":\"login\"}' \"authentication\"\n",
+    },
+    {
+      label: "Run log",
+      value: "AutomnRunLog \"Debug info\"\n",
+    },
+  ]),
+  createSnippetGroup("Notifications", [
+    {
+      label: "Notify admins",
+      value: "AutomnNotify \"Admins\" \"Deployment completed\" \"info\"\n",
+    },
+  ]),
 ];
 
 const SNIPPETS = {
-  node: NODE_SNIPPETS,
-  javascript: NODE_SNIPPETS,
-  typescript: NODE_SNIPPETS,
-  python: PYTHON_SNIPPETS,
-  powershell: POWERSHELL_SNIPPETS,
-  shell: SHELL_SNIPPETS,
+  node: NODE_SNIPPET_GROUPS,
+  javascript: NODE_SNIPPET_GROUPS,
+  typescript: NODE_SNIPPET_GROUPS,
+  python: PYTHON_SNIPPET_GROUPS,
+  powershell: POWERSHELL_SNIPPET_GROUPS,
+  shell: SHELL_SNIPPET_GROUPS,
 };
 
 const VARIABLE_WARNING_STORAGE_KEY = "automn.hideVariableSecurityWarning";
@@ -615,7 +692,7 @@ export default function ScriptEditor({
     editorRef.current.focus();
   }, [language, isActive]);
 
-  const snippetOptions = useMemo(() => SNIPPETS[language] || [], [language]);
+  const snippetGroups = useMemo(() => SNIPPETS[language] || [], [language]);
   const variableOptions = useMemo(() => {
     if (!variables) return [];
     const groups = [
@@ -1049,7 +1126,7 @@ export default function ScriptEditor({
                 ))}
               </select>
             )}
-            {snippetOptions.length > 0 && (
+            {snippetGroups.length > 0 && (
               <select
                 onChange={handleSnippetInsert}
                 className="bg-slate-900 border border-slate-600 rounded px-2 py-1 text-xs text-slate-200"
@@ -1058,10 +1135,17 @@ export default function ScriptEditor({
                 <option value="" disabled>
                   Insert snippet…
                 </option>
-                {snippetOptions.map((option) => (
-                  <option key={option.label} value={option.value}>
-                    {option.label}
-                  </option>
+                {snippetGroups.map((group) => (
+                  <optgroup key={group.groupLabel} label={group.groupLabel}>
+                    {group.options.map((option) => (
+                      <option
+                        key={`${group.groupLabel}-${option.label}`}
+                        value={option.value}
+                      >
+                        {group.groupLabel} › {option.label}
+                      </option>
+                    ))}
+                  </optgroup>
                 ))}
               </select>
             )}

@@ -1156,6 +1156,9 @@ function initializeSchema(database) {
       runner_uptime INTEGER,
       runner_runtimes TEXT,
       minimum_host_version TEXT,
+      package_manager TEXT,
+      desired_packages TEXT,
+      installed_packages TEXT,
       admin_only INTEGER DEFAULT 0,
       created_at TEXT DEFAULT CURRENT_TIMESTAMP,
       updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
@@ -1193,6 +1196,9 @@ function initializeSchema(database) {
       ensureColumn("runner_uptime", "INTEGER");
       ensureColumn("runner_runtimes", "TEXT");
       ensureColumn("minimum_host_version", "TEXT");
+      ensureColumn("package_manager", "TEXT");
+      ensureColumn("desired_packages", "TEXT");
+      ensureColumn("installed_packages", "TEXT");
       ensureColumn("admin_only", "INTEGER DEFAULT 0");
       ensureColumn("created_at", "TEXT DEFAULT CURRENT_TIMESTAMP");
       ensureColumn("updated_at", "TEXT DEFAULT CURRENT_TIMESTAMP");
@@ -1352,6 +1358,134 @@ function serializeRunnerRuntimes(value) {
   }
 }
 
+function parseRunnerPackageList(value) {
+  if (!value) {
+    return [];
+  }
+  if (Array.isArray(value)) {
+    return value
+      .map((entry) => (typeof entry === "string" ? entry.trim() : ""))
+      .filter(Boolean);
+  }
+  if (typeof value !== "string") {
+    return [];
+  }
+  try {
+    const parsed = JSON.parse(value);
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+    return parsed
+      .map((entry) => (typeof entry === "string" ? entry.trim() : ""))
+      .filter(Boolean);
+  } catch (err) {
+    return [];
+  }
+}
+
+function serializeRunnerPackageList(value) {
+  if (!Array.isArray(value)) {
+    return null;
+  }
+  const normalized = Array.from(
+    new Set(
+      value
+        .map((entry) => (typeof entry === "string" ? entry.trim() : ""))
+        .filter(Boolean),
+    ),
+  );
+  try {
+    return JSON.stringify(normalized);
+  } catch (err) {
+    return null;
+  }
+}
+
+function parseRunnerInstalledPackages(value) {
+  if (!value) {
+    return [];
+  }
+  const source = typeof value === "string" ? value : JSON.stringify(value);
+  if (!source) {
+    return [];
+  }
+  try {
+    const parsed = JSON.parse(source);
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+    return parsed
+      .map((entry) => {
+        if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
+          return null;
+        }
+        const name = typeof entry.name === "string" ? entry.name.trim() : "";
+        if (!name) {
+          return null;
+        }
+        const version = typeof entry.version === "string" ? entry.version.trim() : null;
+        const summary = typeof entry.summary === "string" ? entry.summary.trim() : null;
+        const pathValue = typeof entry.path === "string" ? entry.path.trim() : null;
+        const paths = Array.isArray(entry.paths)
+          ? entry.paths
+              .map((item) => (typeof item === "string" ? item.trim() : ""))
+              .filter(Boolean)
+          : [];
+        return {
+          name,
+          version: version || null,
+          summary: summary || null,
+          path: pathValue || (paths[0] || null),
+          paths,
+        };
+      })
+      .filter(Boolean);
+  } catch (err) {
+    return [];
+  }
+}
+
+function serializeRunnerInstalledPackages(value) {
+  if (!Array.isArray(value)) {
+    return null;
+  }
+  const normalized = value
+    .map((entry) => {
+      if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
+        return null;
+      }
+      const name = typeof entry.name === "string" ? entry.name.trim() : "";
+      if (!name) {
+        return null;
+      }
+      const paths = Array.isArray(entry.paths)
+        ? Array.from(
+            new Set(
+              entry.paths
+                .map((item) => (typeof item === "string" ? item.trim() : ""))
+                .filter(Boolean),
+            ),
+          )
+        : [];
+      const pathValue = typeof entry.path === "string" ? entry.path.trim() : "";
+      const summary = typeof entry.summary === "string" ? entry.summary.trim() : "";
+      const version = typeof entry.version === "string" ? entry.version.trim() : "";
+      return {
+        name,
+        version: version || null,
+        summary: summary || null,
+        path: pathValue || (paths[0] || null),
+        paths,
+      };
+    })
+    .filter(Boolean);
+  try {
+    return JSON.stringify(normalized);
+  } catch (err) {
+    return null;
+  }
+}
+
 function mapRunnerHostRow(row, { includeSecret = false } = {}) {
   if (!row) return null;
   const mapped = {
@@ -1379,6 +1513,9 @@ function mapRunnerHostRow(row, { includeSecret = false } = {}) {
         : Number(row.runner_uptime),
     runnerRuntimes: parseRunnerRuntimes(row.runner_runtimes),
     minimumHostVersion: row.minimum_host_version || null,
+    packageManager: row.package_manager || null,
+    desiredPackages: parseRunnerPackageList(row.desired_packages),
+    installedPackages: parseRunnerInstalledPackages(row.installed_packages),
     adminOnly: normalizeDbBoolean(row.admin_only),
     createdAt: row.created_at || null,
     updatedAt: row.updated_at || null,
@@ -1400,7 +1537,7 @@ function getRunnerHostById(database, id, { includeSecret = false } = {}) {
     }
 
     database.get(
-      `SELECT id, name, secret_hash, status, status_message, endpoint, last_seen_at, max_concurrency, timeout_ms, runner_version, runner_os, runner_platform, runner_arch, runner_uptime, runner_runtimes, minimum_host_version, admin_only, created_at, updated_at, disabled_at
+      `SELECT id, name, secret_hash, status, status_message, endpoint, last_seen_at, max_concurrency, timeout_ms, runner_version, runner_os, runner_platform, runner_arch, runner_uptime, runner_runtimes, minimum_host_version, package_manager, desired_packages, installed_packages, admin_only, created_at, updated_at, disabled_at
          FROM runner_hosts
         WHERE id=?`,
       [id],
@@ -1418,7 +1555,7 @@ function getRunnerHostById(database, id, { includeSecret = false } = {}) {
 function listRunnerHosts(database) {
   return new Promise((resolve, reject) => {
     database.all(
-      `SELECT id, name, status, status_message, endpoint, last_seen_at, max_concurrency, timeout_ms, runner_version, runner_os, runner_platform, runner_arch, runner_uptime, runner_runtimes, minimum_host_version, admin_only, created_at, updated_at, disabled_at
+      `SELECT id, name, status, status_message, endpoint, last_seen_at, max_concurrency, timeout_ms, runner_version, runner_os, runner_platform, runner_arch, runner_uptime, runner_runtimes, minimum_host_version, package_manager, desired_packages, installed_packages, admin_only, created_at, updated_at, disabled_at
          FROM runner_hosts
         ORDER BY name COLLATE NOCASE ASC`,
       [],
@@ -1545,6 +1682,21 @@ function updateRunnerHostStatus(database, id, updates = {}) {
   if (Object.prototype.hasOwnProperty.call(updates, "minimumHostVersion")) {
     fields.push("minimum_host_version=?");
     values.push(updates.minimumHostVersion || null);
+  }
+
+  if (Object.prototype.hasOwnProperty.call(updates, "packageManager")) {
+    fields.push("package_manager=?");
+    values.push(updates.packageManager || null);
+  }
+
+  if (Object.prototype.hasOwnProperty.call(updates, "desiredPackages")) {
+    fields.push("desired_packages=?");
+    values.push(serializeRunnerPackageList(updates.desiredPackages));
+  }
+
+  if (Object.prototype.hasOwnProperty.call(updates, "installedPackages")) {
+    fields.push("installed_packages=?");
+    values.push(serializeRunnerInstalledPackages(updates.installedPackages));
   }
 
   if (Object.prototype.hasOwnProperty.call(updates, "adminOnly")) {

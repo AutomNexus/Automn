@@ -140,6 +140,21 @@ const RUNNER_STATUS = Object.freeze({
 
 const RUNNER_HEALTH_WINDOW_MS = 2 * 60 * 1000;
 const MIN_RUNNER_SECRET_LENGTH = 12;
+const RUNNER_RECOMMENDED_PACKAGES = Object.freeze([
+  "chromium",
+  "curl",
+  "wget",
+  "git",
+  "zip",
+  "unzip",
+  "jq",
+  "ffmpeg",
+  "poppler-utils",
+  "default-mysql-client",
+  "sqlite3",
+  "postgresql-client",
+  "openssh-client",
+]);
 const SCHEDULER_ENABLED_SETTING_KEY = "scheduler_enabled";
 const SCHEDULER_POLL_INTERVAL_MS = 30 * 1000;
 
@@ -386,6 +401,9 @@ function sanitizeRunnerHost(host) {
         ? { ...host.runnerRuntimes }
         : {},
     minimumHostVersion: host.minimumHostVersion || null,
+    packageManager: host.packageManager || null,
+    desiredPackages: Array.isArray(host.desiredPackages) ? [...host.desiredPackages] : [],
+    installedPackages: Array.isArray(host.installedPackages) ? host.installedPackages.map((pkg) => ({ ...pkg, paths: Array.isArray(pkg?.paths) ? [...pkg.paths] : [] })) : [],
     hostVersion: HOST_VERSION,
     minimumRunnerVersion: MINIMUM_RUNNER_VERSION,
     adminOnly: Boolean(host.adminOnly),
@@ -2902,14 +2920,11 @@ async function applyPackageStatuses(scriptId, statuses = []) {
   }
 }
 
-async function requestRunnerPackageStatus({
-  runnerHostId,
-  scriptId,
-  packages,
-  installMissing = true,
-}) {
-  if (!runnerHostId || !Array.isArray(packages) || !packages.length) {
-    return { packages: [] };
+async function requestRunnerEndpoint({ runnerHostId, pathname, method = "GET", body = undefined }) {
+  if (!runnerHostId) {
+    const error = new Error("Runner host id is required");
+    error.code = "runner_missing";
+    throw error;
   }
 
   if (!httpFetch) {
@@ -2927,24 +2942,25 @@ async function requestRunnerPackageStatus({
     throw error;
   }
 
-  const target = new URL("/api/packages/status", host.endpoint);
+  const target = new URL(pathname, host.endpoint);
   const headers = {
-    "content-type": "application/json",
     accept: "application/json",
     ...(host.headers || {}),
   };
 
+  const requestOptions = {
+    method,
+    headers,
+  };
+
+  if (body !== undefined) {
+    headers["content-type"] = "application/json";
+    requestOptions.body = JSON.stringify(body);
+  }
+
   let response;
   try {
-    response = await httpFetch(target.toString(), {
-      method: "POST",
-      headers,
-      body: JSON.stringify({
-        scriptId,
-        packages,
-        installMissing,
-      }),
-    });
+    response = await httpFetch(target.toString(), requestOptions);
   } catch (err) {
     const error = new Error(
       err?.message
@@ -2963,27 +2979,52 @@ async function requestRunnerPackageStatus({
     bodyText = "";
   }
 
+  let payload = null;
+  if (bodyText) {
+    try {
+      payload = JSON.parse(bodyText);
+    } catch (err) {
+      const error = new Error("Runner returned an invalid JSON response");
+      error.cause = err;
+      throw error;
+    }
+  }
+
   if (!response.ok) {
-    const message = bodyText
-      ? `Runner responded with ${response.status}: ${bodyText}`
-      : `Runner responded with ${response.status}`;
+    const message = payload?.error
+      ? `Runner responded with ${response.status}: ${payload.error}`
+      : bodyText
+        ? `Runner responded with ${response.status}: ${bodyText}`
+        : `Runner responded with ${response.status}`;
     const error = new Error(message);
     error.status = response.status;
+    error.data = payload;
     throw error;
   }
 
-  if (!bodyText) {
+  return payload && typeof payload === "object" ? payload : {};
+}
+
+async function requestRunnerPackageStatus({
+  runnerHostId,
+  scriptId,
+  packages,
+  installMissing = true,
+}) {
+  if (!runnerHostId || !Array.isArray(packages) || !packages.length) {
     return { packages: [] };
   }
 
-  try {
-    const payload = JSON.parse(bodyText);
-    return payload && typeof payload === "object" ? payload : { packages: [] };
-  } catch (err) {
-    const error = new Error("Runner returned an invalid JSON response");
-    error.cause = err;
-    throw error;
-  }
+  return requestRunnerEndpoint({
+    runnerHostId,
+    pathname: "/api/packages/status",
+    method: "POST",
+    body: {
+      scriptId,
+      packages,
+      installMissing,
+    },
+  });
 }
 
 async function synchronizeScriptPackages({
@@ -4473,6 +4514,101 @@ app.post("/api/settings/runner-hosts", requireAdmin, async (req, res) => {
   }
 });
 
+app.get("/api/settings/runner-hosts/:id/system-packages", requireAdmin, async (req, res) => {
+  const hostId = typeof req.params.id === "string" ? req.params.id.trim() : "";
+  if (!hostId) {
+    res.status(400).json({ error: "Runner host id is required" });
+    return;
+  }
+
+  try {
+    const payload = await requestRunnerEndpoint({
+      runnerHostId: hostId,
+      pathname: "/api/system/packages",
+    });
+    const existing = await db.getRunnerHostById(hostId, { includeSecret: true });
+    const merged = existing
+      ? await db.updateRunnerHostStatus(hostId, {
+          packageManager: payload?.packageManager || existing.packageManager || null,
+          desiredPackages: Array.isArray(payload?.desiredPackages) ? payload.desiredPackages : existing.desiredPackages || [],
+          installedPackages: Array.isArray(payload?.installedPackages) ? payload.installedPackages : existing.installedPackages || [],
+        })
+      : null;
+    res.json({
+      ...payload,
+      runnerHost: merged ? sanitizeRunnerHost(merged) : null,
+      recommendedPackages: RUNNER_RECOMMENDED_PACKAGES,
+    });
+  } catch (err) {
+    console.error("Failed to load runner system packages", err);
+    res.status(err?.status || 500).json({
+      error: err?.data?.error || err?.message || "Failed to load runner system packages",
+    });
+  }
+});
+
+app.get("/api/settings/runner-hosts/:id/system-packages/search", requireAdmin, async (req, res) => {
+  const hostId = typeof req.params.id === "string" ? req.params.id.trim() : "";
+  const query = typeof req.query?.q === "string" ? req.query.q.trim() : "";
+  if (!hostId) {
+    res.status(400).json({ error: "Runner host id is required" });
+    return;
+  }
+  if (!query) {
+    res.status(400).json({ error: "Search query is required" });
+    return;
+  }
+
+  try {
+    const payload = await requestRunnerEndpoint({
+      runnerHostId: hostId,
+      pathname: `/api/system/packages/search?q=${encodeURIComponent(query)}`,
+    });
+    res.json(payload);
+  } catch (err) {
+    console.error("Failed to search runner system packages", err);
+    res.status(err?.status || 500).json({
+      error: err?.data?.error || err?.message || "Failed to search runner system packages",
+    });
+  }
+});
+
+app.post("/api/settings/runner-hosts/:id/system-packages/install", requireAdmin, async (req, res) => {
+  const hostId = typeof req.params.id === "string" ? req.params.id.trim() : "";
+  const packages = Array.isArray(req.body?.packages) ? req.body.packages : [];
+  if (!hostId) {
+    res.status(400).json({ error: "Runner host id is required" });
+    return;
+  }
+
+  try {
+    const payload = await requestRunnerEndpoint({
+      runnerHostId: hostId,
+      pathname: "/api/system/packages/install",
+      method: "POST",
+      body: { packages },
+    });
+    const existing = await db.getRunnerHostById(hostId, { includeSecret: true });
+    const merged = existing
+      ? await db.updateRunnerHostStatus(hostId, {
+          packageManager: payload?.packageManager || existing.packageManager || null,
+          desiredPackages: Array.isArray(payload?.desiredPackages) ? payload.desiredPackages : existing.desiredPackages || [],
+          installedPackages: Array.isArray(payload?.installedPackages) ? payload.installedPackages : existing.installedPackages || [],
+        })
+      : null;
+    res.json({
+      ...payload,
+      runnerHost: merged ? sanitizeRunnerHost(merged) : null,
+      recommendedPackages: RUNNER_RECOMMENDED_PACKAGES,
+    });
+  } catch (err) {
+    console.error("Failed to install runner system packages", err);
+    res.status(err?.status || 500).json({
+      error: err?.data?.error || err?.message || "Failed to install runner system packages",
+    });
+  }
+});
+
 app.post(
   "/api/settings/runner-hosts/:id/rotate-secret",
   requireAdmin,
@@ -5269,6 +5405,39 @@ app.post("/api/settings/runner-hosts/:id/register", async (req, res) => {
   const normalizedRunnerUptime =
     Number.isFinite(parsedUptime) && parsedUptime >= 0 ? parsedUptime : null;
   const normalizedRuntimes = normalizeRunnerRuntimesPayload(req.body?.runtimes);
+  const normalizedPackageManager =
+    typeof req.body?.packageManager === "string" && req.body.packageManager.trim()
+      ? req.body.packageManager.trim()
+      : null;
+  const normalizedDesiredPackages = Array.isArray(req.body?.desiredPackages)
+    ? req.body.desiredPackages
+        .map((pkg) => (typeof pkg === "string" ? pkg.trim() : ""))
+        .filter(Boolean)
+    : [];
+  const normalizedInstalledPackages = Array.isArray(req.body?.installedPackages)
+    ? req.body.installedPackages
+        .map((entry) => {
+          if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
+            return null;
+          }
+          const name = typeof entry.name === "string" ? entry.name.trim() : "";
+          if (!name) {
+            return null;
+          }
+          return {
+            name,
+            version: typeof entry.version === "string" ? entry.version.trim() || null : null,
+            summary: typeof entry.summary === "string" ? entry.summary.trim() || null : null,
+            path: typeof entry.path === "string" ? entry.path.trim() || null : null,
+            paths: Array.isArray(entry.paths)
+              ? entry.paths
+                  .map((value) => (typeof value === "string" ? value.trim() : ""))
+                  .filter(Boolean)
+              : [],
+          };
+        })
+        .filter(Boolean)
+    : [];
 
   const now = new Date().toISOString();
 
@@ -5288,6 +5457,9 @@ app.post("/api/settings/runner-hosts/:id/register", async (req, res) => {
       runnerUptime: normalizedRunnerUptime,
       runnerRuntimes: normalizedRuntimes,
       minimumHostVersion: normalizedMinimumHostVersion,
+      packageManager: normalizedPackageManager,
+      desiredPackages: normalizedDesiredPackages,
+      installedPackages: normalizedInstalledPackages,
       clearDisabledAt: true,
     });
   } catch (err) {

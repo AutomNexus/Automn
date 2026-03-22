@@ -2,6 +2,22 @@ import { useEffect, useMemo, useState } from "react";
 import { apiRequest } from "../utils/api";
 import { useNotificationDialog } from "./NotificationDialogProvider";
 
+const RUNNER_RECOMMENDED_PACKAGES = [
+  "chromium",
+  "curl",
+  "wget",
+  "git",
+  "zip",
+  "unzip",
+  "jq",
+  "ffmpeg",
+  "poppler-utils",
+  "default-mysql-client",
+  "sqlite3",
+  "postgresql-client",
+  "openssh-client",
+];
+
 const initialFormState = {
   id: "",
   name: "",
@@ -262,6 +278,7 @@ export default function SettingsRunnerHosts({ onAuthError }) {
   const [hostNotices, setHostNotices] = useState({});
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [expandedHosts, setExpandedHosts] = useState({});
+  const [packagePanels, setPackagePanels] = useState({});
 
   const expandHost = (hostId) => {
     if (!hostId) return;
@@ -273,6 +290,7 @@ export default function SettingsRunnerHosts({ onAuthError }) {
 
   const toggleHostExpansion = (hostId) => {
     if (!hostId) return;
+    const shouldOpen = !expandedHosts[hostId];
     setExpandedHosts((prev) => {
       const next = { ...prev };
       if (next[hostId]) {
@@ -282,6 +300,9 @@ export default function SettingsRunnerHosts({ onAuthError }) {
       }
       return next;
     });
+    if (shouldOpen) {
+      loadRunnerPackageDetails(hostId).catch(() => {});
+    }
   };
 
   const sortedHosts = useMemo(() => {
@@ -296,6 +317,111 @@ export default function SettingsRunnerHosts({ onAuthError }) {
       next.sort((a, b) => (a.name || "").localeCompare(b.name || ""));
       return next;
     });
+  };
+
+  const updatePackagePanel = (hostId, updates) => {
+    if (!hostId) return;
+    setPackagePanels((prev) => ({
+      ...prev,
+      [hostId]: {
+        ...(prev[hostId] || {
+          query: "",
+          results: [],
+          isSearching: false,
+          isInstalling: false,
+          error: "",
+          lastLoadedAt: 0,
+        }),
+        ...updates,
+      },
+    }));
+  };
+
+  const loadRunnerPackageDetails = async (hostId, { force = false } = {}) => {
+    if (!hostId) return;
+    const currentPanel = packagePanels[hostId];
+    if (!force && currentPanel?.lastLoadedAt) {
+      return;
+    }
+    updatePackagePanel(hostId, { error: "" });
+    try {
+      const response = await apiRequest(`/api/settings/runner-hosts/${hostId}/system-packages`);
+      const updatedHost = response?.runnerHost;
+      if (updatedHost) {
+        updateHostList(updatedHost);
+      } else {
+        updateHostList({
+          ...(hosts.find((entry) => entry.id === hostId) || { id: hostId }),
+          packageManager: response?.packageManager || null,
+          desiredPackages: Array.isArray(response?.desiredPackages) ? response.desiredPackages : [],
+          installedPackages: Array.isArray(response?.installedPackages) ? response.installedPackages : [],
+        });
+      }
+      updatePackagePanel(hostId, { lastLoadedAt: Date.now() });
+    } catch (err) {
+      updatePackagePanel(hostId, {
+        error: err?.data?.error || err.message || "Failed to load system packages.",
+      });
+    }
+  };
+
+  const handlePackageSearchChange = (hostId, value) => {
+    updatePackagePanel(hostId, { query: value, error: "" });
+  };
+
+  const handlePackageSearch = async (hostId) => {
+    const query = packagePanels[hostId]?.query?.trim() || "";
+    if (!query) {
+      updatePackagePanel(hostId, { results: [], error: "Enter a package name to search." });
+      return;
+    }
+    updatePackagePanel(hostId, { isSearching: true, error: "" });
+    try {
+      const response = await apiRequest(`/api/settings/runner-hosts/${hostId}/system-packages/search?q=${encodeURIComponent(query)}`);
+      updatePackagePanel(hostId, { results: Array.isArray(response?.results) ? response.results : [] });
+    } catch (err) {
+      updatePackagePanel(hostId, {
+        error: err?.data?.error || err.message || "Failed to search packages.",
+      });
+    } finally {
+      updatePackagePanel(hostId, { isSearching: false });
+    }
+  };
+
+  const handleInstallPackages = async (host, packageNames) => {
+    if (!host?.id) return;
+    const packages = Array.from(new Set((Array.isArray(packageNames) ? packageNames : [])
+      .map((entry) => (typeof entry === "string" ? entry.trim() : ""))
+      .filter(Boolean)));
+    if (!packages.length) {
+      updatePackagePanel(host.id, { error: "Select at least one package to install." });
+      return;
+    }
+    updatePackagePanel(host.id, { isInstalling: true, error: "" });
+    try {
+      const response = await apiRequest(`/api/settings/runner-hosts/${host.id}/system-packages/install`, {
+        method: "POST",
+        body: { packages },
+      });
+      if (response?.runnerHost) {
+        updateHostList(response.runnerHost);
+      }
+      setHostNotice(host.id, {
+        type: "success",
+        message: `Installed packages: ${packages.join(", ")}.`,
+      });
+      updatePackagePanel(host.id, {
+        results: [],
+        query: "",
+        lastLoadedAt: Date.now(),
+      });
+    } catch (err) {
+      updatePackagePanel(host.id, {
+        error: err?.data?.error || err.message || "Failed to install packages.",
+      });
+    } finally {
+      updatePackagePanel(host.id, { isInstalling: false });
+    }
   };
 
   const setHostNotice = (hostId, notice) => {
@@ -703,7 +829,7 @@ export default function SettingsRunnerHosts({ onAuthError }) {
   return (
     <div className="space-y-6">
       {!isCreateOpen && (
-        <div className="flex justify-end">
+        <div className="relative z-10 flex justify-end">
           <button
             type="button"
             onClick={() => {
@@ -880,6 +1006,9 @@ export default function SettingsRunnerHosts({ onAuthError }) {
               );
               const { icon: osIcon, label: osLabel } = getOsIndicator(host);
               const isExpanded = Boolean(expandedHosts[host.id]);
+              const packagePanel = packagePanels[host.id] || {};
+              const installedPackages = Array.isArray(host.installedPackages) ? host.installedPackages : [];
+              const desiredPackages = Array.isArray(host.desiredPackages) ? host.desiredPackages : [];
 
               return (
                 <div
@@ -1169,6 +1298,127 @@ export default function SettingsRunnerHosts({ onAuthError }) {
                             </div>
                           </div>
                         </div>
+                        <div className="md:col-span-2 lg:col-span-3">
+                          <span className="text-xs uppercase text-slate-500">Additional applications</span>
+                          <div className="mt-2 rounded-md border border-slate-800/80 bg-slate-950/40 p-3">
+                            <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+                              <div>
+                                <div className="text-sm font-medium text-slate-200">
+                                  Package manager: {host.packageManager || "Unavailable"}
+                                </div>
+                                <div className="mt-1 text-xs text-slate-500">
+                                  Installed packages are persisted in runner state and re-applied when the runner starts.
+                                </div>
+                              </div>
+                              <div className="flex flex-wrap gap-2">
+                                {RUNNER_RECOMMENDED_PACKAGES.map((pkg) => (
+                                  <button
+                                    key={pkg}
+                                    type="button"
+                                    onClick={() => handleInstallPackages(host, [pkg])}
+                                    disabled={packagePanel.isInstalling || host.packageManager !== "apt"}
+                                    className="rounded border border-slate-700 px-2.5 py-1 text-xs font-semibold text-slate-200 transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+                                  >
+                                    + {pkg}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                            <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+                              <input
+                                type="text"
+                                value={packagePanel.query || ""}
+                                onChange={(event) => handlePackageSearchChange(host.id, event.target.value)}
+                                placeholder="Search apt packages"
+                                className="flex-1 rounded border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 focus:border-slate-500 focus:outline-none"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => handlePackageSearch(host.id)}
+                                disabled={packagePanel.isSearching || host.packageManager !== "apt"}
+                                className="button-clear rounded border px-3 py-2 text-xs font-semibold uppercase tracking-wide transition-colors disabled:cursor-not-allowed disabled:opacity-60"
+                              >
+                                {packagePanel.isSearching ? "Searching..." : "Search apt"}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => loadRunnerPackageDetails(host.id, { force: true })}
+                                className="button-clear rounded border px-3 py-2 text-xs font-semibold uppercase tracking-wide transition-colors"
+                              >
+                                Refresh apps
+                              </button>
+                            </div>
+                            {packagePanel.error && (
+                              <div className="mt-3 text-sm text-rose-400">{packagePanel.error}</div>
+                            )}
+                            {desiredPackages.length > 0 && (
+                              <div className="mt-4">
+                                <div className="text-xs uppercase text-slate-500">Persisted packages</div>
+                                <div className="mt-2 flex flex-wrap gap-2">
+                                  {desiredPackages.map((pkg) => (
+                                    <span key={pkg} className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-xs text-emerald-200">
+                                      {pkg}
+                                    </span>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                            {Array.isArray(packagePanel.results) && packagePanel.results.length > 0 && (
+                              <div className="mt-4">
+                                <div className="text-xs uppercase text-slate-500">Search results</div>
+                                <div className="mt-2 space-y-2">
+                                  {packagePanel.results.map((pkg) => (
+                                    <div key={pkg.name} className="flex flex-col gap-2 rounded border border-slate-800/70 bg-slate-900/60 px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
+                                      <div>
+                                        <div className="font-mono text-sm text-slate-100">{pkg.name}</div>
+                                        <div className="text-xs text-slate-400">{pkg.summary || "No description available."}</div>
+                                      </div>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleInstallPackages(host, [pkg.name])}
+                                        disabled={packagePanel.isInstalling}
+                                        className="button-run rounded border px-3 py-1.5 text-xs font-semibold uppercase tracking-wide transition-colors disabled:cursor-not-allowed disabled:opacity-60"
+                                      >
+                                        {packagePanel.isInstalling ? "Installing..." : "Install"}
+                                      </button>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                            <div className="mt-4">
+                              <div className="text-xs uppercase text-slate-500">Installed applications</div>
+                              {installedPackages.length > 0 ? (
+                                <div className="mt-2 overflow-x-auto">
+                                  <table className="min-w-full text-left text-sm text-slate-300">
+                                    <thead>
+                                      <tr className="text-xs uppercase text-slate-500">
+                                        <th className="pb-2 pr-4 font-medium">Package</th>
+                                        <th className="pb-2 pr-4 font-medium">Version</th>
+                                        <th className="pb-2 pr-4 font-medium">Path</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                      {installedPackages.map((pkg) => (
+                                        <tr key={pkg.name} className="border-t border-slate-800/60 align-top">
+                                          <td className="py-2 pr-4">
+                                            <div className="font-mono text-slate-100">{pkg.name}</div>
+                                            {pkg.summary && <div className="text-xs text-slate-500">{pkg.summary}</div>}
+                                          </td>
+                                          <td className="py-2 pr-4 font-mono text-xs text-slate-200">{pkg.version || "—"}</td>
+                                          <td className="py-2 pr-4 font-mono text-xs text-slate-400">{pkg.path || "—"}</td>
+                                        </tr>
+                                      ))}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              ) : (
+                                <div className="mt-1 text-slate-400">No persisted applications reported yet.</div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
                         <div className="md:col-span-2 lg:col-span-3">
                           <span className="text-xs uppercase text-slate-500">Runtime versions</span>
                           {runtimeEntries.length > 0 ? (
